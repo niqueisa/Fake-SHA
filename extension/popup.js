@@ -1,5 +1,4 @@
-document.getElementById("btnCheck").addEventListener("click", () => {
-  const el = document.getElementById("status");
-  const now = new Date().toLocaleString();
-  el.textContent = `Status: Popup JS works (${now})`;
+document.getElementById('btnCheck').addEventListener('click', () => {
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = `Status: Popup JS works (${new Date().toLocaleString()})`;
 });
