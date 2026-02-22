@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "FAKE-SHA",
+  "version": "0.1.0",
+  "description": "Fake news detection with explainable AI.",
+  "action": {
+    "default_title": "FAKE-SHA",
+    "default_popup": "popup.html"
+  },
+  "permissions": [],
+  "host_permissions": []
+}
