@@ -4,43 +4,36 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FAKE-SHA</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 12px;
-      width: 280px;
-    }
-    h1 {
-      font-size: 16px;
-      margin: 0 0 8px;
-    }
-    p {
-      margin: 0;
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    .status-box {
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-    }
-    button {
-      margin-top: 10px;
-      width: 100%;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      cursor: pointer;
-    }
-  </style>
+
+  <!-- Tailwind compiled CSS -->
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <h1>FAKE-SHA</h1>
-  <p>Extension skeleton test (Popup should load).</p>
-  <div class="status-box" id="status">Status: Not checked</div>
-  <button id="btnCheck" type="button">Run test</button>
+
+<body class="w-[280px] bg-gray-100 p-4 font-sans">
+
+  <div class="bg-white rounded-xl shadow-md p-4">
+
+    <h1 class="text-lg font-bold text-blue-600 mb-2">
+      FAKE-SHA
+    </h1>
+
+    <p class="text-sm text-gray-600">
+      Extension skeleton test (Popup should load).
+    </p>
+
+    <div id="status"
+         class="mt-4 p-3 rounded-lg border border-gray-300 bg-gray-50 text-sm">
+      Status: Not checked
+    </div>
+
+    <button id="btnCheck"
+            class="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition duration-200">
+      Run test
+    </button>
+
+  </div>
+
   <script src="popup.js"></script>
+
 </body>
 </html>
