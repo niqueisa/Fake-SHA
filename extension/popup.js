@@ -11,7 +11,6 @@ document.addEventListener("DOMContentLoaded", () => {
   showEmpty();
 
   // Simulate enabling Analyze (for now)
-  // You can remove this later when real text selection is implemented
   btnAnalyze.disabled = false;
   btnAnalyze.classList.remove("bg-gray-200", "text-gray-500", "cursor-not-allowed");
   btnAnalyze.classList.add("bg-[#1e2c3e]", "text-white", "hover:opacity-95", "transition");
