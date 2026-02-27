@@ -67,3 +67,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btnBackToEmpty").addEventListener("click", showEmpty);
   }
 });
+
+const btnOpenHistory = document.getElementById("btnOpenHistory");
+btnOpenHistory.addEventListener("click", () => {
+  window.location.href = "history.html";
+});
