@@ -5,26 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FAKE-SHA</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="custom.css">
 </head>
 
-<body class="w-[280px] bg-gray-100 font-sans">
-  <div class="bg-white rounded-xl shadow-md overflow-hidden">
+<body class="popup-fixed w-[280px] bg-gray-100 font-sans">
+  <div class="popup-inner bg-white rounded-xl shadow-md overflow-hidden flex-1 flex flex-col">
 
     <!-- Header -->
-    <header class="bg-[#1e2c3e] text-white px-4 py-3 flex items-center justify-between">
+    <header class="popup-header bg-[#1e2c3e] text-white px-4 py-3 flex items-center justify-between flex-shrink-0">
       <div class="flex items-center gap-2">
-        <!-- simple shield placeholder -->
-        <div class="h-6 w-6 rounded-md bg-white/10 flex items-center justify-center text-xs">
-          S
-        </div>
-        <div class="font-semibold">FAKE-SHA</div>
+        <img src="logo.png" alt="FAKE-SHA" class="h-6 w-6 rounded-md object-contain flex-shrink-0" />
+        <div class="font-semibold text-base truncate">FAKE-SHA</div>
       </div>
 
       <!-- Status indicator placeholder -->
-      <div class="h-8 w-8 rounded-full bg-white/15"></div>
+      <div class="status-dot h-6 w-6 rounded-full bg-white/15 flex-shrink-0"></div>
     </header>
 
-    <main class="p-4">
+    <main class="popup-main p-4">
 
       <!-- Empty/main state (default) -->
       <section id="emptyState">

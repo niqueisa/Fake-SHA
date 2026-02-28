@@ -150,3 +150,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+const btnOpenHistory = document.getElementById("btnOpenHistory");
+btnOpenHistory.addEventListener("click", () => {
+  window.location.href = "history.html";
+});
