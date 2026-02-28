@@ -102,85 +102,17 @@
         </button>
       </section>
 
-      <!-- RESULT STATE (Tricia UI) -->
-<section id="resultState" class="hidden space-y-4">
+      <!-- RESULT STATE PLACEHOLDER (here ka po mag-start na mag-build Tricia) -->
+      <section id="resultState" class="hidden">
+        <!-- Keep empty for now or a placeholder text -->
+        <div class="text-sm text-gray-600">
+          Result UI will appear here.
+        </div>
+      </section>
 
-  <!-- Verdict & Confidence Banner -->
-  <div id="verdictBanner" class="p-3 rounded-xl text-white font-bold">
-    Verdict Text
-    <p id="confidenceText" class="text-sm font-normal mt-1">Confidence: 0%</p>
+    </main>
   </div>
 
-  <!-- Indicators Section (5 indicators) -->
-  <div id="indicatorsSection" class="space-y-3">
-
-    <!-- Indicator 1 -->
-    <div class="flex justify-between text-sm">
-      <span>Indicator 1</span>
-      <span class="shap-value px-1 rounded bg-gray-200 text-xs">0.5</span>
-    </div>
-    <div class="h-2 bg-gray-200 rounded overflow-hidden">
-      <div class="indicator-bar h-full"></div>
-    </div>
-
-    <!-- Indicator 2 -->
-    <div class="flex justify-between text-sm">
-      <span>Indicator 2</span>
-      <span class="shap-value px-1 rounded bg-gray-200 text-xs">0.3</span>
-    </div>
-    <div class="h-2 bg-gray-200 rounded overflow-hidden">
-      <div class="indicator-bar h-full"></div>
-    </div>
-
-    <!-- Indicator 3 -->
-    <div class="flex justify-between text-sm">
-      <span>Indicator 3</span>
-      <span class="shap-value px-1 rounded bg-gray-200 text-xs">0.7</span>
-    </div>
-    <div class="h-2 bg-gray-200 rounded overflow-hidden">
-      <div class="indicator-bar h-full"></div>
-    </div>
-
-    <!-- Indicator 4 -->
-    <div class="flex justify-between text-sm">
-      <span>Indicator 4</span>
-      <span class="shap-value px-1 rounded bg-gray-200 text-xs">0.4</span>
-    </div>
-    <div class="h-2 bg-gray-200 rounded overflow-hidden">
-      <div class="indicator-bar h-full"></div>
-    </div>
-
-    <!-- Indicator 5 -->
-    <div class="flex justify-between text-sm">
-      <span>Indicator 5</span>
-      <span class="shap-value px-1 rounded bg-gray-200 text-xs">0.6</span>
-    </div>
-    <div class="h-2 bg-gray-200 rounded overflow-hidden">
-      <div class="indicator-bar h-full"></div>
-    </div>
-
-  </div>
-
-  <!-- Chart Placeholder -->
-  <div id="chartSection" class="h-24 bg-gray-200 rounded flex items-center justify-center text-gray-500">
-    Chart Placeholder
-  </div>
-
-  <!-- Explainability / Top Tokens -->
-  <div id="explainSection" class="p-2 bg-gray-50 rounded space-y-1">
-    <p class="font-semibold text-sm">Top Tokens:</p>
-    <div class="flex flex-wrap gap-1">
-      <span class="px-2 py-1 bg-gray-200 rounded text-xs">token1</span>
-      <span class="px-2 py-1 bg-gray-200 rounded text-xs">token2</span>
-      <span class="px-2 py-1 bg-gray-200 rounded text-xs">token3</span>
-      <span class="px-2 py-1 bg-gray-200 rounded text-xs">token4</span>
-      <span class="px-2 py-1 bg-gray-200 rounded text-xs">token5</span>
-    </div>
-  </div>
-
-  <!-- Open History / Back Button -->
-  <button id="btnBackToEmpty" class="mt-4 w-full py-2 rounded-xl bg-[#1e2c3e] text-white font-semibold hover:opacity-95 transition">
-    Back
-  </button>
-
-</section>
+  <script src="popup.js"></script>
+</body>
+</html>
