@@ -58,11 +58,11 @@ document.addEventListener("DOMContentLoaded", () => {
             </svg>
           </div>
           <div>
-            <div class="text-xs font-semibold text-gray-800">${item.title}</div>
-            <div class="text-[10px] text-gray-500 mt-1">
+            <div class="text-sm font-semibold text-gray-800">${item.title}</div>
+            <div class="text-xs text-gray-500 mt-1">
               Classified: <span class="font-medium">${item.verdict} (${item.confidence})</span>
             </div>
-            <div class="text-[10px] text-gray-400">Date: ${item.date}</div>
+            <div class="text-xs text-gray-400">Date: ${item.date}</div>
           </div>
         </div>
       `;
@@ -77,7 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
     detailPanel.classList.remove("hidden");
     
     detailContent.innerHTML = `
-      <div class="text-xs space-y-2">
+      <div class="text-sm space-y-2">
         <p><strong>Verdict:</strong> <span class="${item.isFake ? 'text-red-500' : 'text-green-500'} font-bold">${item.verdict}</span></p>
         <p><strong>Confidence:</strong> ${item.confidence}</p>
         <p><strong>Indicators:</strong> ${item.indicators.join(", ")}</p>
