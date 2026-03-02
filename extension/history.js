@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailContent = document.getElementById("detailContent");
   const btnCloseDetail = document.getElementById("btnCloseDetail");
   const btnBack = document.getElementById("btnBack");
+  const btnOpenSettings = document.getElementById("btnOpenSettings");
 
   // Dummy Data
   const dummyHistory = [
@@ -94,6 +95,12 @@ document.addEventListener("DOMContentLoaded", () => {
   btnBack.addEventListener("click", () => {
     window.location.href = "popup.html";
   });
+
+  if (btnOpenSettings) {
+    btnOpenSettings.addEventListener("click", () => {
+      window.location.href = "settings.html";
+    });
+  }
 
   renderHistory();
 });
