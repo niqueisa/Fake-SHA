@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnClear = document.getElementById("btnClear");
   const btnCancelLoading = document.getElementById("btnCancelLoading");
   const btnOpenHistory = document.getElementById("btnOpenHistory");
+  const btnOpenSettings = document.getElementById("btnOpenSettings");
 
   // -----------------------------
   // Dummy data (placeholders)
@@ -91,6 +92,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnOpenHistory) {
     btnOpenHistory.addEventListener("click", () => {
       window.location.href = "history.html";
+    });
+  }
+
+  if (btnOpenSettings) {
+    btnOpenSettings.addEventListener("click", () => {
+      window.location.href = "settings.html";
     });
   }
 
