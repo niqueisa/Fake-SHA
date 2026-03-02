@@ -26,9 +26,6 @@ body.popup-fixed{
 /* Lock header height so controls can't change bar size */
 .popup-header{min-height:56px}
 
-/* Status dot: always 24x24 like history page */
-.status-dot{width:24px;height:24px;min-width:24px;min-height:24px}
-
 /* Back button hit target + hover (fallback if Tailwind utilities aren't present) */
 #btnBack{padding:0.375rem;border-radius:9999px}
 #btnBack:hover{background-color:rgba(255,255,255,.1)}
