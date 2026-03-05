@@ -8,6 +8,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnCancelLoading = document.getElementById("btnCancelLoading");
   const btnOpenHistory = document.getElementById("btnOpenHistory");
   const btnOpenSettings = document.getElementById("btnOpenSettings");
+  const selectedTextValue = document.getElementById("selectedTextValue");
+  const selectionHeader = document.getElementById("selectionHeader");
 
   // -----------------------------
   // Dummy data (placeholders)
@@ -74,9 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Default state
   showEmpty();
-
-  // Simulate enabling Analyze (dummy flow)
-  enableAnalyzeButton();
+  refreshSelectionFromPage();
 
   btnAnalyze.addEventListener("click", () => {
     showLoading();
@@ -86,7 +86,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 1200);
   });
 
-  btnClear.addEventListener("click", () => showEmpty());
+  btnClear.addEventListener("click", () => {
+    showEmpty();
+
+    if (selectedTextValue) {
+      selectedTextValue.textContent = "Nothing selected yet.";
+      selectedTextValue.classList.remove("text-gray-800");
+      selectedTextValue.classList.add("text-gray-400");
+    }
+
+    disableAnalyzeButton();
+    clearSelectionOnPage();
+  });
   btnCancelLoading.addEventListener("click", () => showEmpty());
 
   if (btnOpenHistory) {
@@ -108,6 +119,10 @@ document.addEventListener("DOMContentLoaded", () => {
     emptyState.classList.remove("hidden");
     loadingState.classList.add("hidden");
     resultState.classList.add("hidden");
+
+    if (selectionHeader) {
+      selectionHeader.textContent = "No text selected";
+    }
   }
 
   function showLoading() {
@@ -133,6 +148,85 @@ document.addEventListener("DOMContentLoaded", () => {
       "transition"
     );
     btnAnalyze.title = "";
+  }
+
+  function disableAnalyzeButton() {
+    btnAnalyze.disabled = true;
+    btnAnalyze.classList.remove("bg-[#1e2c3e]", "text-white", "hover:opacity-95");
+    btnAnalyze.classList.add("bg-gray-200", "text-gray-500", "cursor-not-allowed");
+    btnAnalyze.title = "Select text first to enable Analyze";
+  }
+
+  function refreshSelectionFromPage() {
+    if (!selectedTextValue) return;
+
+    // Default UI while we attempt to read selection
+    selectedTextValue.textContent = "Nothing selected yet.";
+    disableAnalyzeButton();
+
+    if (typeof chrome === "undefined" || !chrome.tabs || !chrome.tabs.query) {
+      selectedTextValue.textContent = "Selection not available in this context.";
+      return;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs || !tabs.length || tabs[0].id == null) {
+        selectedTextValue.textContent = "Unable to read selected text on this page.";
+        return;
+      }
+
+      const tabId = tabs[0].id;
+
+      chrome.tabs.sendMessage(
+        tabId,
+        { type: "fakeSha_getSelection" },
+        (response) => {
+          if (chrome.runtime.lastError || !response) {
+            selectedTextValue.textContent =
+              "Unable to read selected text on this page.";
+            return;
+          }
+
+          const text = (response.text || "").trim();
+          if (text) {
+            selectedTextValue.textContent = text;
+            selectedTextValue.classList.remove("text-gray-400");
+            selectedTextValue.classList.add("text-gray-800");
+
+            if (selectionHeader) {
+              selectionHeader.textContent = "Text selected";
+            }
+            enableAnalyzeButton();
+          } else {
+            selectedTextValue.textContent = "Nothing selected yet.";
+            selectedTextValue.classList.remove("text-gray-800");
+            selectedTextValue.classList.add("text-gray-400");
+
+            if (selectionHeader) {
+              selectionHeader.textContent = "No text selected";
+            }
+            disableAnalyzeButton();
+          }
+        }
+      );
+    });
+  }
+
+  function clearSelectionOnPage() {
+    if (typeof chrome === "undefined" || !chrome.tabs || !chrome.tabs.query) {
+      return;
+    }
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs || !tabs.length || tabs[0].id == null) {
+        return;
+      }
+
+      const tabId = tabs[0].id;
+      chrome.tabs.sendMessage(tabId, { type: "fakeSha_clearSelection" }, () => {
+        // Ignore response; best-effort clear.
+      });
+    });
   }
 
   // -----------------------------
