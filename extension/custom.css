@@ -23,6 +23,12 @@ body.popup-fixed{
   overflow-x:hidden;
 }
 
+/* Selected text area in popup: scroll text, not whole page */
+#selectedTextValue{
+  max-height:8rem;
+  overflow-y:auto;
+}
+
 /* Lock header height so controls can't change bar size */
 .popup-header{min-height:56px}
 
