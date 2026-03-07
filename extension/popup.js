@@ -12,8 +12,62 @@ document.addEventListener("DOMContentLoaded", () => {
   const selectionHeader = document.getElementById("selectionHeader");
 
   // -----------------------------
-  // Dummy data (placeholders)
+  // Settings (loaded from extension storage on popup open)
   // -----------------------------
+  const DEFAULT_POPUP_SETTINGS = {
+    backendUrl: "http://localhost:8000",
+    analysisMode: "selection_only",
+    highlightTokens: true,
+    historyEnabled: true,
+  };
+
+  let popupSettings = { ...DEFAULT_POPUP_SETTINGS };
+
+  function getExtensionStorage(callback) {
+    try {
+      const api = typeof chrome !== "undefined" && chrome.storage && chrome.storage.local
+        ? chrome.storage
+        : typeof browser !== "undefined" && browser.storage && browser.storage.local
+          ? browser.storage
+          : null;
+      if (api && api.local) {
+        api.local.get("fakeShaSettings", (result) => {
+          if (chrome?.runtime?.lastError) {
+            callback({ ...DEFAULT_POPUP_SETTINGS });
+            return;
+          }
+          const stored = result && result.fakeShaSettings;
+          if (stored && typeof stored === "object") {
+            popupSettings = {
+              backendUrl: typeof stored.backendUrl === "string" && stored.backendUrl.trim()
+                ? stored.backendUrl.trim()
+                : DEFAULT_POPUP_SETTINGS.backendUrl,
+              analysisMode: stored.analysisMode === "selection_fallback" || stored.analysisMode === "selection_only"
+                ? stored.analysisMode
+                : DEFAULT_POPUP_SETTINGS.analysisMode,
+              highlightTokens: typeof stored.highlightTokens === "boolean"
+                ? stored.highlightTokens
+                : DEFAULT_POPUP_SETTINGS.highlightTokens,
+              historyEnabled: typeof stored.historyEnabled === "boolean"
+                ? stored.historyEnabled
+                : DEFAULT_POPUP_SETTINGS.historyEnabled,
+            };
+          }
+          callback(popupSettings);
+        });
+        return;
+      }
+    } catch (e) {
+      // ignore
+    }
+    callback({ ...DEFAULT_POPUP_SETTINGS });
+  }
+
+  function loadPopupSettingsThenRefresh() {
+    getExtensionStorage(() => {
+      refreshSelectionFromPage();
+    });
+  }
   const dummyFakeResult = {
     articleTitle: "K12 NO MORE DEPED",
     sourceUrl: "https://prcjobhiring.blogspot.com/2025/04/k12-no-more.html",
@@ -76,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Default state
   showEmpty();
-  refreshSelectionFromPage();
+  loadPopupSettingsThenRefresh();
 
   btnAnalyze.addEventListener("click", () => {
     showLoading();
@@ -160,18 +214,29 @@ document.addEventListener("DOMContentLoaded", () => {
   function refreshSelectionFromPage() {
     if (!selectedTextValue) return;
 
+    const fallbackMessage =
+      popupSettings.analysisMode === "selection_fallback"
+        ? "No text selected. Fallback mode is on—page content may be used when you click Analyze (when implemented)."
+        : "Nothing selected yet.";
+
     // Default UI while we attempt to read selection
-    selectedTextValue.textContent = "Nothing selected yet.";
+    selectedTextValue.textContent = fallbackMessage;
     disableAnalyzeButton();
 
     if (typeof chrome === "undefined" || !chrome.tabs || !chrome.tabs.query) {
-      selectedTextValue.textContent = "Selection not available in this context.";
+      selectedTextValue.textContent =
+        popupSettings.analysisMode === "selection_fallback"
+          ? fallbackMessage
+          : "Selection not available in this context.";
       return;
     }
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (chrome.runtime.lastError || !tabs || !tabs.length || tabs[0].id == null) {
-        selectedTextValue.textContent = "Unable to read selected text on this page.";
+        selectedTextValue.textContent =
+          popupSettings.analysisMode === "selection_fallback"
+            ? fallbackMessage
+            : "Unable to read selected text on this page.";
         return;
       }
 
@@ -183,7 +248,9 @@ document.addEventListener("DOMContentLoaded", () => {
         (response) => {
           if (chrome.runtime.lastError || !response) {
             selectedTextValue.textContent =
-              "Unable to read selected text on this page.";
+              popupSettings.analysisMode === "selection_fallback"
+                ? fallbackMessage
+                : "Unable to read selected text on this page.";
             return;
           }
 
@@ -198,7 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             enableAnalyzeButton();
           } else {
-            selectedTextValue.textContent = "Nothing selected yet.";
+            selectedTextValue.textContent = fallbackMessage;
             selectedTextValue.classList.remove("text-gray-800");
             selectedTextValue.classList.add("text-gray-400");
 

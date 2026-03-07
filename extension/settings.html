@@ -105,19 +105,15 @@
       <section class="border border-gray-100 rounded-lg p-3 bg-gray-50">
         <h2 class="text-sm font-semibold text-gray-900">Display Preferences</h2>
         <p class="mt-1 text-xs text-gray-600 leading-relaxed">
-          Control what appears in the analysis results.
+          Control how FAKE-SHA presents analysis results on web pages.
         </p>
         <div class="mt-3 space-y-2">
           <label class="flex items-center justify-between cursor-pointer">
-            <span class="text-sm text-gray-900">Show Confidence Score</span>
-            <input id="toggleShowConfidence" type="checkbox" class="h-4 w-4 rounded border-gray-300">
-          </label>
-          <label class="flex items-center justify-between cursor-pointer">
-            <span class="text-sm text-gray-900">Show Explainability</span>
-            <input id="toggleShowExplainability" type="checkbox" class="h-4 w-4 rounded border-gray-300">
+            <span class="text-sm text-gray-900">Highlight Contributing Phrases</span>
+            <input id="toggleHighlightTokens" type="checkbox" class="h-4 w-4 rounded border-gray-300">
           </label>
           <p class="mt-1 text-[11px] text-gray-500 leading-relaxed">
-            Explainability includes indicators, token highlights, and summary sections.
+            Highlights words and phrases on the page that contributed to the AI classification result.
           </p>
         </div>
       </section>

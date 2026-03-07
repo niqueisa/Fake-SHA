@@ -38,40 +38,48 @@
     </header>
 
     <main class="popup-main p-4 flex-1">
-      <h2 class="text-[#1e2c3e] font-semibold text-base mb-3">Search Records</h2>
+      <!-- Main history view: search + list + export -->
+      <div id="historyListView">
+        <h2 class="text-[#1e2c3e] font-semibold text-base mb-3">Search Records</h2>
 
-      <div class="flex gap-2 mb-4">
-        <input
-          type="text"
-          id="searchHistory"
-          placeholder="Search by keyword or URI"
-          class="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-        <button class="bg-[#2563eb] text-white p-2 rounded-md hover:opacity-90">
+        <div class="flex gap-2 mb-4">
+          <input
+            type="text"
+            id="searchHistory"
+            placeholder="Search by keyword or URI"
+            class="flex-1 text-sm border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+          <button class="bg-[#2563eb] text-white p-2 rounded-md hover:opacity-90">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="historyList" class="space-y-3">
+        </div>
+
+        <button class="mt-4 w-full flex items-center justify-center gap-2 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
+          Export Results
         </button>
       </div>
 
-      <div id="historyList" class="space-y-3">
+      <!-- Full result-style detail view (hidden until a record is clicked) -->
+      <div id="detailPanel" class="hidden">
+        <button
+          id="btnBackToRecords"
+          type="button"
+          class="w-full py-2 rounded-xl text-sm font-semibold border border-gray-300 text-gray-800 hover:bg-gray-50 transition mb-4"
+        >
+          Back to Records
+        </button>
+        <div id="detailContent" class="history-detail-content">
+          <!-- Full result layout injected by history.js -->
         </div>
-
-      <div id="detailPanel" class="hidden mt-4 border-t border-gray-200 pt-4">
-        <div class="flex justify-between items-center mb-2">
-          <h3 class="text-sm font-bold text-gray-800">Record Details</h3>
-          <button id="btnCloseDetail" class="text-gray-500 text-sm hover:text-gray-700">Close</button>
-        </div>
-        <div id="detailContent" class="bg-gray-50 p-3 rounded-lg border border-gray-100 text-sm">
-          </div>
       </div>
-
-      <button class="mt-4 w-full flex items-center justify-center gap-2 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 transition">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        Export Results
-      </button>
     </main>
 
     <footer class="border-t border-gray-100 py-3 text-center flex-shrink-0">
