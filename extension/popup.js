@@ -23,6 +23,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let popupSettings = { ...DEFAULT_POPUP_SETTINGS };
 
+  const HISTORY_KEY = "fakeShaHistory";
+
+  function getStorage() {
+    try {
+      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+        return browser.storage.local;
+      }
+      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+        return chrome.storage.local;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }
+
+  const storage = getStorage();
+
   function getExtensionStorage(callback) {
     try {
       const api = typeof chrome !== "undefined" && chrome.storage && chrome.storage.local
@@ -135,7 +153,9 @@ document.addEventListener("DOMContentLoaded", () => {
   btnAnalyze.addEventListener("click", () => {
     showLoading();
     setTimeout(() => {
-      renderResult(currentMode === "real" ? dummyRealResult : dummyFakeResult);
+      const data = currentMode === "real" ? dummyRealResult : dummyFakeResult;
+      renderResult(data);
+      saveHistoryIfEnabled(data);
       showResult();
     }, 1200);
   });
@@ -495,6 +515,96 @@ document.addEventListener("DOMContentLoaded", () => {
         btnReport.disabled = true;
         btnReport.classList.add("opacity-80", "cursor-not-allowed");
       });
+    }
+  }
+
+  function saveHistoryIfEnabled(resultData) {
+    const proceedWithSave = (enabled) => {
+      if (!enabled) return;
+
+      const label = String(resultData.label || "").toUpperCase();
+      const isFake = label.includes("FAKE");
+      const verdict = isFake ? "Fake News" : "Real News";
+
+      const confidenceNum =
+        typeof resultData.confidence === "number"
+          ? resultData.confidence
+          : parseFloat(String(resultData.confidence || "0").replace("%", "")) || 0;
+
+      const now = new Date();
+      const record = {
+        id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+        articleTitle: resultData.articleTitle || "Untitled",
+        sourceUrl: resultData.sourceUrl || "",
+        selectedText: (selectedTextValue && selectedTextValue.textContent) || "",
+        verdict,
+        confidence: confidenceNum,
+        indicators: Array.isArray(resultData.indicators) ? resultData.indicators : [],
+        summary: resultData.summary || "",
+        label: resultData.label || (isFake ? "FAKE NEWS DETECTED" : "REAL NEWS DETECTED"),
+        topTokensTitle: resultData.topTokensTitle || "Key tokens",
+        topTokensLegend: resultData.topTokensLegend || "Impact",
+        topTokens: Array.isArray(resultData.topTokens) ? resultData.topTokens : [],
+        timestamp: now.toISOString(),
+      };
+
+      const persist = (records) => {
+        const updated = [record, ...(Array.isArray(records) ? records : [])];
+
+        try {
+          if (storage) {
+            storage.set({ [HISTORY_KEY]: updated }, () => {});
+          } else {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+          }
+        } catch (e) {
+          // ignore write errors for now
+        }
+      };
+
+      try {
+        if (storage) {
+          storage.get(HISTORY_KEY, (result) => {
+            const existing = result && Array.isArray(result[HISTORY_KEY]) ? result[HISTORY_KEY] : [];
+            persist(existing);
+          });
+        } else {
+          const raw = localStorage.getItem(HISTORY_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          const existing = Array.isArray(parsed) ? parsed : [];
+          persist(existing);
+        }
+      } catch (e) {
+        // ignore read errors
+      }
+    };
+
+    try {
+      if (storage) {
+        storage.get("fakeShaSettings", (result) => {
+          const stored = result && result.fakeShaSettings;
+          const enabled =
+            stored && typeof stored.historyEnabled === "boolean"
+              ? stored.historyEnabled
+              : DEFAULT_POPUP_SETTINGS.historyEnabled;
+          proceedWithSave(enabled);
+        });
+      } else {
+        const rawSettings = localStorage.getItem("fakeShaSettings");
+        let parsedSettings = null;
+        try {
+          parsedSettings = rawSettings ? JSON.parse(rawSettings) : null;
+        } catch (e) {
+          parsedSettings = null;
+        }
+        const enabled =
+          parsedSettings && typeof parsedSettings.historyEnabled === "boolean"
+            ? parsedSettings.historyEnabled
+            : DEFAULT_POPUP_SETTINGS.historyEnabled;
+        proceedWithSave(enabled);
+      }
+    } catch (e) {
+      proceedWithSave(DEFAULT_POPUP_SETTINGS.historyEnabled);
     }
   }
 

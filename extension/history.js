@@ -7,91 +7,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnBack = document.getElementById("btnBack");
   const btnOpenSettings = document.getElementById("btnOpenSettings");
 
-  // Saved records: full result shape for detail view; list uses title, verdict, confidence, date
-  const dummyHistory = [
-    {
-      id: 1,
-      title: "Climate change hoax article",
-      verdict: "Fake News",
-      confidence: "92.3%",
-      date: "2025-11-15",
-      isFake: true,
-      articleTitle: "Climate change hoax article",
-      sourceUrl: "https://example.com/climate-hoax",
-      label: "FAKE NEWS DETECTED",
-      confidenceNum: 92.3,
-      indicators: [
-        { name: "Sensationalism", shap: -22.0, contributionPct: 28 },
-        { name: "Unverified Source", shap: -18.5, contributionPct: 24 },
-        { name: "Language Tone", shap: -12.0, contributionPct: 16 },
-        { name: "Claim Verification", shap: -10.0, contributionPct: 14 },
-        { name: "Consistency with Known Facts", shap: -8.0, contributionPct: 10 },
-      ],
-      summary: "Lacks scientific consensus and uses emotionally charged language.",
-      topTokensTitle: "Top Tokens Contributing to Misinformation",
-      topTokensLegend: "High Misinformation Impact",
-      topTokens: [
-        { text: "hoax", shap: -5.2, impact: "high" },
-        { text: "conspiracy", shap: -4.1, impact: "high" },
-        { text: "fake", shap: -3.5, impact: "medium" },
-        { text: "alarmist", shap: -2.8, impact: "medium" },
-      ],
-    },
-    {
-      id: 2,
-      title: "Scientific research findings",
-      verdict: "Real News",
-      confidence: "97.8%",
-      date: "2025-11-14",
-      isFake: false,
-      articleTitle: "Scientific research findings",
-      sourceUrl: "https://example.com/research",
-      label: "REAL NEWS DETECTED",
-      confidenceNum: 97.8,
-      indicators: [
-        { name: "Source Credibility", shap: 42.0, contributionPct: 58 },
-        { name: "Claim Verification", shap: 28.0, contributionPct: 42 },
-        { name: "Language Tone", shap: 8.0, contributionPct: 18 },
-        { name: "Sensational Wording", shap: 4.0, contributionPct: 12 },
-        { name: "Consistency with Known Facts", shap: 3.5, contributionPct: 10 },
-      ],
-      summary: "Cross-referenced with peer-reviewed journals and official data.",
-      topTokensTitle: "Top Tokens Contributing to Authenticity",
-      topTokensLegend: "High Authenticity Impact",
-      topTokens: [
-        { text: "peer-reviewed", shap: 12.0, impact: "high" },
-        { text: "study", shap: 8.5, impact: "high" },
-        { text: "data", shap: 5.0, impact: "medium" },
-      ],
-    },
-    {
-      id: 3,
-      title: "Celebrity scandal story",
-      verdict: "Fake News",
-      confidence: "89.4%",
-      date: "2025-11-13",
-      isFake: true,
-      articleTitle: "Celebrity scandal story",
-      sourceUrl: "https://satire.example.com/celebrity",
-      label: "FAKE NEWS DETECTED",
-      confidenceNum: 89.4,
-      indicators: [
-        { name: "Satire", shap: -20.0, contributionPct: 26 },
-        { name: "Missing Attribution", shap: -16.0, contributionPct: 22 },
-        { name: "Sensational Wording", shap: -14.0, contributionPct: 18 },
-        { name: "Source Credibility", shap: -12.0, contributionPct: 14 },
-        { name: "Claim Verification", shap: -8.0, contributionPct: 10 },
-      ],
-      summary: "Source is a known satirical website not clearly labeled.",
-      topTokensTitle: "Top Tokens Contributing to Misinformation",
-      topTokensLegend: "High Misinformation Impact",
-      topTokens: [
-        { text: "scandal", shap: -4.5, impact: "high" },
-        { text: "exclusive", shap: -3.2, impact: "medium" },
-        { text: "revealed", shap: -2.8, impact: "medium" },
-      ],
-    },
-  ];
+  const HISTORY_KEY = "fakeShaHistory";
+
+  function getStorage() {
+    try {
+      if (typeof browser !== "undefined" && browser.storage && browser.storage.local) {
+        return browser.storage.local;
+      }
+      if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+        return chrome.storage.local;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }
+
+  const storage = getStorage();
 
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
@@ -338,38 +270,91 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderHistory() {
-    historyList.innerHTML = "";
-    dummyHistory.forEach((item) => {
-      const card = document.createElement("div");
-      card.className = "p-3 rounded-xl border border-gray-100 bg-white shadow-sm hover:border-blue-200 cursor-pointer transition";
+    if (!historyList) return;
 
-      const iconColor = item.isFake ? "text-red-500" : "text-green-500";
-      const iconPath = item.isFake
-        ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-        : "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z";
+    const renderRecords = (records) => {
+      historyList.innerHTML = "";
 
-      const confidenceDisplay = item.confidenceNum != null ? `${item.confidenceNum}%` : item.confidence;
+      if (!Array.isArray(records) || records.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "text-sm text-gray-400 text-center mt-4";
+        empty.textContent = "No history entries yet.";
+        historyList.appendChild(empty);
+        return;
+      }
 
-      card.innerHTML = `
-        <div class="flex items-start gap-3">
-          <div class="mt-1 ${iconColor}">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}" />
-            </svg>
-          </div>
-          <div>
-            <div class="text-sm font-semibold text-gray-800">${escapeHtml(item.title)}</div>
-            <div class="text-xs text-gray-500 mt-1">
-              Classified: <span class="font-medium">${item.verdict} (${confidenceDisplay})</span>
+      records.forEach((raw) => {
+        const label = String(raw.label || "").toUpperCase();
+        const isFake = label.includes("FAKE");
+        const verdict = raw.verdict || (isFake ? "Fake News" : "Real News");
+
+        const confidenceNum =
+          typeof raw.confidence === "number"
+            ? raw.confidence
+            : parseFloat(String(raw.confidence || "0").replace("%", "")) || 0;
+
+        const title = raw.articleTitle || raw.title || "Untitled";
+
+        let dateText = "";
+        if (raw.timestamp) {
+          const d = new Date(raw.timestamp);
+          if (!Number.isNaN(d.getTime())) {
+            dateText = d.toLocaleDateString();
+          }
+        }
+
+        const card = document.createElement("div");
+        card.className =
+          "p-3 rounded-xl border border-gray-100 bg-white shadow-sm hover:border-blue-200 cursor-pointer transition";
+
+        const iconColor = isFake ? "text-red-500" : "text-green-500";
+        const iconPath = isFake
+          ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+          : "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z";
+
+        const confidenceDisplay = `${confidenceNum.toFixed(1)}%`;
+
+        card.innerHTML = `
+          <div class="flex items-start gap-3">
+            <div class="mt-1 ${iconColor}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}" />
+              </svg>
             </div>
-            <div class="text-xs text-gray-400">Date: ${escapeHtml(item.date)}</div>
+            <div>
+              <div class="text-sm font-semibold text-gray-800">${escapeHtml(title)}</div>
+              <div class="text-xs text-gray-500 mt-1">
+                Classified: <span class="font-medium">${verdict} (${confidenceDisplay})</span>
+              </div>
+              ${
+                dateText
+                  ? `<div class="text-xs text-gray-400">Date: ${escapeHtml(dateText)}</div>`
+                  : ""
+              }
+            </div>
           </div>
-        </div>
-      `;
+        `;
 
-      card.addEventListener("click", () => showDetails(item));
-      historyList.appendChild(card);
-    });
+        card.addEventListener("click", () => showDetails(raw));
+        historyList.appendChild(card);
+      });
+    };
+
+    try {
+      if (storage) {
+        storage.get(HISTORY_KEY, (result) => {
+          const records = result && Array.isArray(result[HISTORY_KEY]) ? result[HISTORY_KEY] : [];
+          renderRecords(records);
+        });
+      } else {
+        const raw = localStorage.getItem(HISTORY_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        const records = Array.isArray(parsed) ? parsed : [];
+        renderRecords(records);
+      }
+    } catch (e) {
+      renderRecords([]);
+    }
   }
 
   if (btnBackToRecords) {
