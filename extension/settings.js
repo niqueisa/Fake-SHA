@@ -4,8 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const backendUrlInput = document.getElementById("backendUrl");
   const modeSelectionOnly = document.getElementById("modeSelectionOnly");
   const modeSelectionFallback = document.getElementById("modeSelectionFallback");
-  const toggleShowConfidence = document.getElementById("toggleShowConfidence");
-  const toggleShowExplainability = document.getElementById("toggleShowExplainability");
+  const toggleHighlightTokens = document.getElementById("toggleHighlightTokens");
   const toggleHistoryEnabled = document.getElementById("toggleHistoryEnabled");
 
   const btnSaveSettings = document.getElementById("btnSaveSettings");
@@ -19,8 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const DEFAULT_SETTINGS = {
     backendUrl: "http://localhost:8000",
     analysisMode: "selection_only",
-    showConfidence: true,
-    showExplainability: true,
+    highlightTokens: true,
     historyEnabled: true,
   };
 
@@ -66,15 +64,12 @@ document.addEventListener("DOMContentLoaded", () => {
       modeSelectionOnly.checked = true;
     }
 
-    toggleShowConfidence.checked =
-      typeof settings.showConfidence === "boolean"
-        ? settings.showConfidence
-        : DEFAULT_SETTINGS.showConfidence;
-
-    toggleShowExplainability.checked =
-      typeof settings.showExplainability === "boolean"
-        ? settings.showExplainability
-        : DEFAULT_SETTINGS.showExplainability;
+    if (toggleHighlightTokens) {
+      toggleHighlightTokens.checked =
+        typeof settings.highlightTokens === "boolean"
+          ? settings.highlightTokens
+          : DEFAULT_SETTINGS.highlightTokens;
+    }
 
     toggleHistoryEnabled.checked =
       typeof settings.historyEnabled === "boolean"
@@ -90,8 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       backendUrl: backendUrlInput.value.trim() || DEFAULT_SETTINGS.backendUrl,
       analysisMode,
-      showConfidence: !!toggleShowConfidence.checked,
-      showExplainability: !!toggleShowExplainability.checked,
+      highlightTokens: !!(toggleHighlightTokens && toggleHighlightTokens.checked),
       historyEnabled: !!toggleHistoryEnabled.checked,
     };
   }
