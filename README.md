@@ -1,6 +1,6 @@
 # FAKE-SHA
 
-FAKE-SHA is a browser extension developed as a Bachelor of Science in Computer Science (BSCS 4B) thesis project. The system is designed to assist users in analyzing selected text from web pages and identifying the likelihood of misinformation using machine learning and natural language processing techniques.
+FAKE-SHA is a browser extension developed as a Bachelor of Science in Computer Science (BSCS 4B) thesis project. The system assists users in analyzing selected text from web pages and identifying the likelihood of misinformation using machine learning and natural language processing techniques.
 
 ## Developers
 
@@ -20,33 +20,32 @@ FAKE-SHA consists of two primary components:
 * Displays analysis results, confidence scores, and indicators
 * Designed to be compatible with major browsers (Chromium-based and Firefox)
 
-### 2. Backend API (Under Development)
+### 2. Backend API
 
-* Built using Python (Flask or FastAPI)
-* Performs NLP preprocessing and model inference
-* Returns classification results and explainability data
-* Intended to integrate models such as RoBERTa and SHAP for interpretability
+* Built using Python (FastAPI)
+* Performs analysis and returns verdict (FAKE/REAL), confidence, summary, and indicators
+* Integrates with Supabase (PostgreSQL) for optional analysis record storage
+* Designed for future ML/NLP model integration (e.g., RoBERTa, SHAP)
 
-## Features (Planned / In Progress)
+## Features
 
 * Text selection-based analysis
-* Confidence scoring
-* Indicator-based breakdown of results
-* Explainability support
-* Analysis history tracking
+* Confidence scoring and indicator breakdown
+* Phrase highlighting of relevant tokens
+* Analysis history (stored in extension)
 * Configurable backend endpoint
+* Fallback mode when backend is unavailable
+* Optional Supabase storage for analysis records
 
 ## Project Structure
 
 ```
 FAKE-SHA/
-│
-├── extension/        # Browser extension source files
-├── backend/          # Backend API (ML/NLP services)
-├── docs/             # Documentation and design guides
-├── ui/               # Tailwind input and build files
-├── package.json      # Build configuration
-└── README.md
+├── extension/        # Browser extension (popup, settings, history, content script)
+├── backend/          # FastAPI API + Supabase integration (see backend/README.md)
+├── ui/               # Tailwind CSS source (input.css)
+├── package.json      # Tailwind build scripts
+└── README.md         # This file
 ```
 
 ## Development Setup
@@ -56,37 +55,31 @@ FAKE-SHA/
 * Node.js (LTS recommended)
 * npm
 * Git
-* Visual Studio Code (recommended)
+* Python 3.x (for backend)
 
-### Installation
+### Extension (Frontend)
 
-After cloning the repository:
+1. Install dependencies:
 
-```
-npm install
-```
+   ```bash
+   npm install
+   ```
 
-### Tailwind CSS Build
+2. Build Tailwind CSS:
 
-For development (watch mode):
+   - Development (watch mode): `npm run dev:css`
+   - Production: `npm run build:css`
 
-```
-npm run dev:css
-```
+   Output: `extension/styles.css` (do not edit manually)
 
-For production build:
+### Backend (API)
 
-```
-npm run build:css
-```
+See **[backend/README.md](backend/README.md)** for:
 
-The compiled CSS will be generated at:
-
-```
-extension/styles.css
-```
-
-Do not manually edit `extension/styles.css` as it is auto-generated.
+* Virtual environment setup
+* Dependencies (`pip install -r requirements.txt`)
+* Optional Supabase configuration
+* Running the server (`uvicorn main:app --reload --host 0.0.0.0 --port 8000`)
 
 ## Loading the Extension (Chromium-Based Browsers)
 
@@ -94,6 +87,13 @@ Do not manually edit `extension/styles.css` as it is auto-generated.
 2. Enable Developer Mode
 3. Click "Load unpacked"
 4. Select the `extension/` folder
+
+## README Guide
+
+| File | Purpose |
+|------|---------|
+| **README.md** (root) | Project overview, structure, extension setup, how to load the extension |
+| **backend/README.md** | Backend-only: API setup, Supabase, testing, replacing the mock analyzer |
 
 ## Branching and Contribution Workflow
 

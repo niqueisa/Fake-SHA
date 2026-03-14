@@ -7,13 +7,22 @@ analysis; designed for easy replacement with a real ML/NLP model later.
 Endpoints:
     GET  /health  - Health check for monitoring and CORS preflight
     POST /analyze - Analyze article text and return verdict
+
+Supabase: When SUPABASE_URL and SUPABASE_KEY are set, successful analyses
+are stored in the analysis_records table. Database failures do not affect
+the API response.
 """
+
+from dotenv import load_dotenv
+
+load_dotenv()  # Load .env file for local development (SUPABASE_URL, SUPABASE_KEY)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import AnalyzeRequest
 from mock_analyzer import analyze_text
+from record_store import save_analysis_record
 
 # -----------------------------------------------------------------------------
 # Application setup
@@ -62,10 +71,28 @@ def analyze(request: AnalyzeRequest):
 
     The analysis logic lives in mock_analyzer.py and can be replaced
     with a real ML model without changing this route.
+
+    When Supabase is configured, the analysis record is stored for later
+    analysis. Storage failures are logged but do not affect the response.
     """
+    # Run existing mock analysis (unchanged behavior)
     result = analyze_text(
         text=request.text,
         title=request.title,
         url=request.url,
     )
+
+    # Optionally store in Supabase (never blocks or breaks the response)
+    save_analysis_record(
+        title=request.title,
+        url=request.url,
+        text=request.text,
+        mode=request.mode,
+        verdict=result.verdict,
+        confidence=result.confidence,
+        summary=result.summary,
+        indicators=result.indicators,
+        extraction_source=None,  # Optional; not provided by current request model
+    )
+
     return result.model_dump()

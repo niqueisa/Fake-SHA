@@ -2,10 +2,6 @@
   "name": "fake-sha",
   "version": "1.0.0",
   "description": "FAKE-SHA Browser Extension",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
   "scripts": {
   "dev:css": "tailwindcss -i ./ui/input.css -o ./extension/styles.css --watch",
   "build:css": "tailwindcss -i ./ui/input.css -o ./extension/styles.css --minify"

@@ -1,26 +1,35 @@
 # FAKE-SHA Backend
 
-Simple FastAPI backend for fake news detection. Uses mock keyword-based analysis until the real ML/NLP model is ready.
+FastAPI backend for fake news detection. Uses mock keyword-based analysis until the real ML/NLP model is ready.
+
+> **See [../README.md](../README.md)** for full project context (extension, structure, setup overview).
 
 ## Project Structure
 
 ```
 backend/
-├── main.py          # FastAPI app, routes, CORS
-├── models.py        # Request/response Pydantic models
-├── mock_analyzer.py # Mock analysis logic (replace with ML later)
-├── requirements.txt # Python dependencies
-└── README.md        # This file
+├── main.py           # FastAPI app, routes, CORS
+├── models.py         # Request/response Pydantic models
+├── mock_analyzer.py  # Mock analysis logic (replace with ML later)
+├── supabase_client.py# Supabase client (optional; env-based)
+├── record_store.py   # Saves analysis records to Supabase
+├── requirements.txt  # Python dependencies
+├── .env.example      # Template for environment variables
+├── sql/
+│   └── analysis_records.sql  # Table schema for Supabase
+└── README.md         # This file
 ```
 
 ### File Descriptions
 
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI application. Defines `GET /health` and `POST /analyze`, configures CORS. |
+| `main.py` | FastAPI application. Defines `GET /health` and `POST /analyze`, configures CORS. Integrates Supabase storage when configured. |
 | `models.py` | Pydantic models for `AnalyzeRequest` and `AnalyzeResponse`. Ensures type safety and clear API contract. |
 | `mock_analyzer.py` | Keyword-based mock analyzer. Detects words like "shocking", "viral", "exposed" and returns FAKE; otherwise REAL. Designed to be swapped for a real model. |
-| `requirements.txt` | Dependencies: FastAPI and Uvicorn. |
+| `supabase_client.py` | Lazy-loads Supabase client from env vars. Returns `None` if not configured so the backend runs without a database. |
+| `record_store.py` | Saves analysis records to the `analysis_records` table. Never raises; logs failures instead. |
+| `requirements.txt` | Dependencies: FastAPI, Uvicorn, Supabase client, python-dotenv. |
 
 ## Setup
 
@@ -40,13 +49,40 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
+> Use `venv` or `.venv`; both are in `.gitignore`.
+
 ### 2. Install dependencies
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-### 3. Run the server
+### 3. (Optional) Configure Supabase for storing analysis records
+
+The backend runs fine without Supabase. To store analyses in a PostgreSQL database:
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. Run the table schema in the SQL Editor (see [SQL Schema](#supabase-sql-schema) below).
+3. Copy `.env.example` to `.env` and fill in your credentials:
+
+   ```powershell
+   copy .env.example .env
+   ```
+
+   Edit `.env`:
+
+   ```
+   SUPABASE_URL=https://your-project-id.supabase.co
+   SUPABASE_KEY=your-anon-or-service-role-key
+   ```
+
+   Get these from **Supabase Dashboard → Project Settings → API**.
+
+4. The project `.gitignore` already excludes `.env`; do not commit it.
+
+If Supabase is not configured or insertions fail, the `/analyze` endpoint still returns results. Errors are logged but do not break the API.
+
+### 4. Run the server
 
 ```powershell
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -57,6 +93,28 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 - `--port 8000`: Matches the default backend URL in the FAKE-SHA extension settings
 
 The API will be available at **http://localhost:8000**.
+
+### Supabase SQL Schema
+
+Run this in the Supabase SQL Editor to create the `analysis_records` table:
+
+```sql
+CREATE TABLE IF NOT EXISTS analysis_records (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    title           TEXT NOT NULL DEFAULT '',
+    url             TEXT NOT NULL DEFAULT '',
+    text            TEXT NOT NULL DEFAULT '',
+    verdict         TEXT NOT NULL,
+    confidence      DOUBLE PRECISION NOT NULL,
+    summary         TEXT NOT NULL DEFAULT '',
+    indicators      JSONB NOT NULL DEFAULT '[]',
+    mode            TEXT NOT NULL DEFAULT 'selection_only',
+    extraction_source TEXT
+);
+```
+
+The schema is also in `sql/analysis_records.sql`.
 
 ## Testing
 
