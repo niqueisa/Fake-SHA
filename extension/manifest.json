@@ -9,6 +9,7 @@
   },
   "permissions": [
     "activeTab",
+    "storage",
     "tabs"
   ],
   "host_permissions": [

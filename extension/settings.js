@@ -148,13 +148,88 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (btnTestConnection) {
-    btnTestConnection.addEventListener("click", () => {
-      if (testConnectionStatus) {
-        testConnectionStatus.textContent =
-          "Test connection is a UI-only placeholder. No network request is made yet.";
+  /**
+   * Test backend connectivity by calling GET /health.
+   * Disables the button during the request and shows clear status messages.
+   */
+  async function testConnection() {
+    if (!btnTestConnection || !testConnectionStatus) return;
+
+    // Read and validate backend URL from the form (use current input, not saved)
+    const rawUrl = (backendUrlInput && backendUrlInput.value || "").trim();
+    if (!rawUrl) {
+      testConnectionStatus.textContent = "Invalid backend URL. Enter a URL first.";
+      testConnectionStatus.style.color = "#b91c1c";
+      return;
+    }
+
+    // Trim trailing slashes for clean /health path
+    const baseUrl = rawUrl.replace(/\/+$/, "");
+    let healthUrl;
+    try {
+      healthUrl = new URL("/health", baseUrl).href;
+    } catch (e) {
+      testConnectionStatus.textContent = "Invalid backend URL.";
+      testConnectionStatus.style.color = "#b91c1c";
+      return;
+    }
+
+    // Disable button and show "Testing..."
+    btnTestConnection.disabled = true;
+    btnTestConnection.classList.add("opacity-60", "cursor-not-allowed");
+    testConnectionStatus.textContent = "Testing connection...";
+    testConnectionStatus.style.color = "#6b7280";
+
+    const CONNECTION_TIMEOUT_MS = 8000;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
+
+      const response = await fetch(healthUrl, {
+        method: "GET",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
       }
-    });
+
+      const text = await response.text();
+      try {
+        JSON.parse(text);
+      } catch (e) {
+        throw new Error("Malformed JSON response");
+      }
+
+      testConnectionStatus.textContent = "Connected to backend.";
+      testConnectionStatus.style.color = "#15803d";
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      if (err.name === "AbortError") {
+        testConnectionStatus.textContent = "Connection timed out.";
+      } else if (msg.includes("fetch") || msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        testConnectionStatus.textContent = "Backend unavailable.";
+      } else if (msg.includes("Invalid")) {
+        testConnectionStatus.textContent = "Invalid backend URL.";
+      } else if (msg.includes("Malformed")) {
+        testConnectionStatus.textContent = "Unexpected server response.";
+      } else if (msg.startsWith("HTTP")) {
+        testConnectionStatus.textContent = "Unexpected server response.";
+      } else {
+        testConnectionStatus.textContent = "Backend unavailable.";
+      }
+      testConnectionStatus.style.color = "#b91c1c";
+    } finally {
+      btnTestConnection.disabled = false;
+      btnTestConnection.classList.remove("opacity-60", "cursor-not-allowed");
+    }
+  }
+
+  if (btnTestConnection) {
+    btnTestConnection.addEventListener("click", () => testConnection());
   }
 
   // Initial load

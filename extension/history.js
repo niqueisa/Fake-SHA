@@ -6,8 +6,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnBackToRecords = document.getElementById("btnBackToRecords");
   const btnBack = document.getElementById("btnBack");
   const btnOpenSettings = document.getElementById("btnOpenSettings");
+  const searchHistoryInput = document.getElementById("searchHistory");
+  const btnSearchHistory = document.getElementById("btnSearchHistory");
 
   const HISTORY_KEY = "fakeShaHistory";
+
+  // Store full records for client-side search (avoids re-fetching on each keystroke)
+  let allRecords = [];
 
   function getStorage() {
     try {
@@ -269,16 +274,39 @@ document.addEventListener("DOMContentLoaded", () => {
     showDetailView();
   }
 
-  function renderHistory() {
+  /**
+   * Filter records by search query (keyword or URI).
+   * Matches against: article title, source URL, selected text, verdict, summary.
+   */
+  function filterRecords(records, query) {
+    if (!query || !String(query).trim()) return records;
+    const q = String(query).trim().toLowerCase();
+    return records.filter((r) => {
+      const title = String(r.articleTitle || r.title || "").toLowerCase();
+      const url = String(r.sourceUrl || "").toLowerCase();
+      const selected = String(r.selectedText || "").toLowerCase();
+      const verdict = String(r.verdict || r.label || "").toLowerCase();
+      const summary = String(r.summary || "").toLowerCase();
+      return (
+        title.includes(q) ||
+        url.includes(q) ||
+        selected.includes(q) ||
+        verdict.includes(q) ||
+        summary.includes(q)
+      );
+    });
+  }
+
+  function renderRecords(records) {
     if (!historyList) return;
 
-    const renderRecords = (records) => {
       historyList.innerHTML = "";
 
       if (!Array.isArray(records) || records.length === 0) {
         const empty = document.createElement("div");
         empty.className = "text-sm text-gray-400 text-center mt-4";
-        empty.textContent = "No history entries yet.";
+        const query = searchHistoryInput ? searchHistoryInput.value.trim() : "";
+        empty.textContent = query ? "No matches found." : "No history entries yet.";
         historyList.appendChild(empty);
         return;
       }
@@ -338,22 +366,33 @@ document.addEventListener("DOMContentLoaded", () => {
         card.addEventListener("click", () => showDetails(raw));
         historyList.appendChild(card);
       });
-    };
+  }
 
+  /**
+   * Apply current search query to allRecords and re-render the list.
+   */
+  function applySearchAndRender() {
+    const query = searchHistoryInput ? searchHistoryInput.value.trim() : "";
+    const filtered = filterRecords(allRecords, query);
+    renderRecords(filtered);
+  }
+
+  function loadAndRenderHistory() {
     try {
       if (storage) {
         storage.get(HISTORY_KEY, (result) => {
-          const records = result && Array.isArray(result[HISTORY_KEY]) ? result[HISTORY_KEY] : [];
-          renderRecords(records);
+          allRecords = result && Array.isArray(result[HISTORY_KEY]) ? result[HISTORY_KEY] : [];
+          applySearchAndRender();
         });
       } else {
         const raw = localStorage.getItem(HISTORY_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
-        const records = Array.isArray(parsed) ? parsed : [];
-        renderRecords(records);
+        allRecords = Array.isArray(parsed) ? parsed : [];
+        applySearchAndRender();
       }
     } catch (e) {
-      renderRecords([]);
+      allRecords = [];
+      applySearchAndRender();
     }
   }
 
@@ -371,5 +410,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  renderHistory();
+  // Search: filter on input and on button click
+  if (searchHistoryInput) {
+    searchHistoryInput.addEventListener("input", applySearchAndRender);
+    searchHistoryInput.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") applySearchAndRender();
+    });
+  }
+  if (btnSearchHistory) {
+    btnSearchHistory.addEventListener("click", applySearchAndRender);
+  }
+
+  loadAndRenderHistory();
 });

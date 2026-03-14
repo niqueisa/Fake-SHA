@@ -86,82 +86,349 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshSelectionFromPage();
     });
   }
-  const dummyFakeResult = {
-    articleTitle: "K12 NO MORE DEPED",
-    sourceUrl: "https://prcjobhiring.blogspot.com/2025/04/k12-no-more.html",
-    label: "FAKE NEWS DETECTED",
-    confidence: 94.7,
-    indicators: [
-      { name: "Source Credibility", shap: -25.0, contributionPct: 22 },
-      { name: "Claim Verification", shap: -30.0, contributionPct: 28 },
-      { name: "Language Tone", shap: -15.2, contributionPct: 14 },
-      { name: "Sensational Wording", shap: -14.5, contributionPct: 13 },
-      { name: "Consistency with Known Facts", shap: -10.0, contributionPct: 10 },
-    ],
-    topTokensTitle: "Top Tokens Contributing to Misinformation",
-    topTokensLegend: "High Misinformation Impact",
-    topTokens: [
-      { text: "CLICK HERE", shap: -6.2, impact: "high" },
-      { text: "NO GRADE 11", shap: -5.8, impact: "high" },
-      { text: "K12 NO MORE", shap: -5.0, impact: "high" },
-      { text: "KUNG TAGA SAAN KA?", shap: -4.5, impact: "high" },
-      { text: "SCHOOL YEAR 2025 -2016", shap: -3.1, impact: "medium" },
-      { text: "ANNOUNCEMENT ||", shap: -2.2, impact: "low" },
-    ],
-    summary:
-      "Primary Reason: High-Confidence Misinformation Alert for Claim Mismatch & Sensationalism",
-  };
-
-  const dummyRealResult = {
-    articleTitle: "Duterte stays in detention; ICC Appeals …",
-    sourceUrl: "https://verafiles.org/articles/duterte-stays-in-detention-icc-appeals-…",
-    label: "REAL NEWS DETECTED",
-    confidence: 98.2,
-    indicators: [
-      { name: "Source Credibility", shap: 45.0, contributionPct: 62 },
-      { name: "Claim Verification", shap: 40.0, contributionPct: 56 },
-      { name: "Language Tone", shap: 5.2, contributionPct: 18 },
-      { name: "Sensational Wording", shap: 4.5, contributionPct: 16 },
-      { name: "Consistency with Known Facts", shap: 3.5, contributionPct: 14 },
-    ],
-    topTokensTitle: "Top Tokens Contributing to Authenticity",
-    topTokensLegend: "High Authenticity Impact",
-    topTokens: [
-      {
-        text: "Appeals Chamber of the International Criminal Court",
-        shap: 18.5,
-        impact: "high",
-      },
-      { text: "rejected all three grounds", shap: 10.0, impact: "medium" },
-      { text: "Sept. 26 ruling (released Oct.10)", shap: 6.5, impact: "low" },
-      {
-        text: "Presiding Judge Luz del Carmen Ibañez Carranza",
-        shap: 5.0,
-        impact: "low",
-      },
-    ],
-    summary: "Primary Reason: Verified Institutional Source & Objective Reporting",
-  };
-
-  // Temporary UI toggle state (dummy only)
-  let currentMode = "fake"; // "fake" | "real"
-
   // Default state
   showEmpty();
   loadPopupSettingsThenRefresh();
 
   btnAnalyze.addEventListener("click", () => {
-    showLoading();
-    setTimeout(() => {
-      const data = currentMode === "real" ? dummyRealResult : dummyFakeResult;
-      renderResult(data);
-      saveHistoryIfEnabled(data);
-      showResult();
-    }, 1200);
+    doAnalyze();
   });
+
+  /**
+   * Main Analyze flow: get selection, call backend, render result.
+   * Uses async/await for clean error handling.
+   */
+  async function doAnalyze() {
+    showLoading();
+    hideError();
+
+    try {
+      // 1. Load settings (backendUrl, mode, etc.)
+      const settings = await new Promise((resolve) => {
+        getExtensionStorage(resolve);
+      });
+
+      const backendUrl = (settings.backendUrl || DEFAULT_POPUP_SETTINGS.backendUrl).trim();
+      if (!backendUrl) {
+        showErrorAndReset("Backend URL is not configured. Open Settings to set it.");
+        return;
+      }
+
+      // Remove trailing slash from backend URL for clean /analyze path
+      const baseUrl = backendUrl.replace(/\/+$/, "");
+
+      // 2. Get text to analyze: selected text first, or page content in fallback mode
+      let textToAnalyze = await getSelectedTextFromPage();
+      textToAnalyze = (textToAnalyze || "").trim();
+
+      if (!textToAnalyze) {
+        if (settings.analysisMode === "selection_fallback") {
+          // Fallback mode: try to extract page content
+          const pageContent = await getPageContentFromPage();
+          textToAnalyze = (pageContent.text || "").trim();
+          if (!textToAnalyze) {
+            showErrorAndReset(
+              "Could not extract page content. Try selecting text manually, or open an article page."
+            );
+            return;
+          }
+          // Use page title from extraction if available (tab title is fetched below)
+        } else {
+          showErrorAndReset("Please select text on the page first.");
+          return;
+        }
+      }
+
+      // 3. Get active tab URL and title (fallback to empty if unavailable)
+      const tabInfo = await getActiveTabInfo();
+      const pageUrl = tabInfo.url || "";
+      const pageTitle = tabInfo.title || "Untitled";
+
+      // 4. Build request payload
+      const payload = {
+        text: textToAnalyze,
+        url: pageUrl,
+        title: pageTitle,
+        mode: settings.analysisMode || "selection_only",
+      };
+
+      // 5. Send POST request to backend
+      const response = await fetch(`${baseUrl}/analyze`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(
+          `Server error (${response.status}): ${errText.slice(0, 100) || "Unknown error"}`
+        );
+      }
+
+      const jsonText = await response.text();
+      let backendResult;
+      try {
+        backendResult = JSON.parse(jsonText);
+      } catch (e) {
+        throw new Error("Invalid JSON response from backend.");
+      }
+
+      // 6. Map backend response to popup's render format
+      const mappedData = mapBackendResponseToPopupFormat(backendResult, {
+        articleTitle: pageTitle,
+        sourceUrl: pageUrl,
+      });
+
+      // 7. Render result and save to history
+      renderResult(mappedData);
+      saveHistoryIfEnabled(mappedData);
+      showResult();
+
+      // 8. If highlightTokens is enabled, highlight contributing phrases on the page
+      if (settings.highlightTokens && tabInfo.tabId != null) {
+        const tokens = Array.isArray(backendResult.tokens) ? backendResult.tokens : [];
+        sendHighlightTokensToPage(tabInfo.tabId, tokens);
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "An unexpected error occurred.";
+      showErrorAndReset(getUserFriendlyError(message));
+    }
+  }
+
+  /**
+   * Get page content (article/main/body text) from the active tab via content script.
+   * Used when selection_fallback mode is on and no text is selected.
+   */
+  function getPageContentFromPage() {
+    return new Promise((resolve) => {
+      const fallback = { text: "", pageTitle: "", extractionSource: "body" };
+      if (typeof chrome === "undefined" || !chrome.tabs?.query) {
+        resolve(fallback);
+        return;
+      }
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError || !tabs?.length || tabs[0].id == null) {
+          resolve(fallback);
+          return;
+        }
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { type: "fakeSha_getPageContent" },
+          (response) => {
+            if (chrome.runtime.lastError || !response) {
+              resolve(fallback);
+              return;
+            }
+            resolve({
+              text: response.text || "",
+              pageTitle: response.pageTitle || "",
+              extractionSource: response.extractionSource || "body",
+            });
+          }
+        );
+      });
+    });
+  }
+
+  /**
+   * Get selected text from the active tab via content script messaging.
+   */
+  function getSelectedTextFromPage() {
+    return new Promise((resolve) => {
+      if (typeof chrome === "undefined" || !chrome.tabs?.query) {
+        resolve((selectedTextValue && selectedTextValue.textContent) || "");
+        return;
+      }
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError || !tabs?.length || tabs[0].id == null) {
+          resolve((selectedTextValue && selectedTextValue.textContent) || "");
+          return;
+        }
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { type: "fakeSha_getSelection" },
+          (response) => {
+            if (chrome.runtime.lastError || !response) {
+              resolve((selectedTextValue && selectedTextValue.textContent) || "");
+              return;
+            }
+            resolve((response.text || "").trim());
+          }
+        );
+      });
+    });
+  }
+
+  /**
+   * Get active tab URL, title, and id using Chrome extension API.
+   */
+  function getActiveTabInfo() {
+    return new Promise((resolve) => {
+      const fallback = { url: "", title: "", tabId: null };
+      if (typeof chrome === "undefined" || !chrome.tabs?.query) {
+        resolve(fallback);
+        return;
+      }
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError || !tabs?.length || !tabs[0]) {
+          resolve(fallback);
+          return;
+        }
+        resolve({
+          url: tabs[0].url || "",
+          title: tabs[0].title || "",
+          tabId: tabs[0].id,
+        });
+      });
+    });
+  }
+
+  /**
+   * Send tokens to content script for page highlighting (when highlightTokens setting is on).
+   */
+  function sendHighlightTokensToPage(tabId, tokens) {
+    if (tabId == null || typeof chrome === "undefined" || !chrome.tabs?.sendMessage) return;
+    const tokenTexts = Array.isArray(tokens)
+      ? tokens.map((t) => (typeof t === "string" ? t : t && t.text ? t.text : "")).filter(Boolean)
+      : [];
+    if (tokenTexts.length === 0) return;
+    chrome.tabs.sendMessage(tabId, { type: "fakeSha_highlightTokens", tokens: tokenTexts }, () => {
+      if (chrome.runtime.lastError) {
+        // Ignore: content script may not be loaded (e.g. chrome:// page)
+      }
+    });
+  }
+
+  /**
+   * Clear FAKE-SHA highlights on the active tab.
+   */
+  function clearHighlightsOnPage() {
+    if (typeof chrome === "undefined" || !chrome.tabs?.query) return;
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (chrome.runtime.lastError || !tabs?.length || tabs[0].id == null) return;
+      chrome.tabs.sendMessage(tabs[0].id, { type: "fakeSha_clearHighlights" }, () => {
+        if (chrome.runtime.lastError) {
+          // Ignore
+        }
+      });
+    });
+  }
+
+  /**
+   * Map backend /analyze response to popup's render format.
+   * Backend returns: verdict, confidence (0-1), summary, indicators (string[]), tokens ({text, impact, label}[])
+   * Popup expects: label, confidence (0-100), indicators ({name, shap, contributionPct}[]), topTokens ({text, shap, impact}[]), etc.
+   */
+  function mapBackendResponseToPopupFormat(backend, meta = {}) {
+    const isFake = String(backend.verdict || "").toUpperCase() === "FAKE";
+    const confidencePct =
+      typeof backend.confidence === "number"
+        ? backend.confidence * 100
+        : parseFloat(String(backend.confidence || "0")) * 100 || 0;
+
+    const label = isFake ? "FAKE NEWS DETECTED" : "REAL NEWS DETECTED";
+    const topTokensTitle = isFake
+      ? "Top Tokens Contributing to Misinformation"
+      : "Top Tokens Contributing to Authenticity";
+    const topTokensLegend = isFake
+      ? "High Misinformation Impact"
+      : "High Authenticity Impact";
+
+    const indicatorsRaw = Array.isArray(backend.indicators)
+      ? backend.indicators
+      : [];
+    const indicators = indicatorsRaw.map((name, i) => {
+      const contributionPct = Math.max(10, 80 - i * 15);
+      const shap = isFake ? -(20 + i * 5) : 20 + i * 5;
+      return {
+        name: typeof name === "string" ? name : "Indicator",
+        shap,
+        contributionPct,
+      };
+    });
+
+    const tokensRaw = Array.isArray(backend.tokens) ? backend.tokens : [];
+    const topTokens = tokensRaw.map((t) => {
+      const impact = t.impact || "medium";
+      const isFakeToken =
+        String(t.label || "").toLowerCase().includes("fake") || isFake;
+      const shapMap = { high: 6, medium: 4, low: 2 };
+      const val = shapMap[impact] || shapMap.medium;
+      const shap = isFakeToken ? -val : val;
+      return {
+        text: t.text || "",
+        impact,
+        shap,
+      };
+    });
+
+    return {
+      articleTitle: meta.articleTitle || "Untitled",
+      sourceUrl: meta.sourceUrl || "",
+      label,
+      confidence: Math.min(100, Math.max(0, confidencePct)),
+      indicators,
+      topTokensTitle,
+      topTokensLegend,
+      topTokens,
+      summary: backend.summary || "No summary available.",
+    };
+  }
+
+  /**
+   * Convert technical errors to user-friendly messages.
+   */
+  function getUserFriendlyError(message) {
+    if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
+      return "Backend unavailable. Check that the server is running and the URL in Settings is correct.";
+    }
+    if (message.includes("invalid") || message.includes("Invalid")) {
+      return "Invalid backend response. Please try again.";
+    }
+    if (message.includes("CORS") || message.includes("blocked")) {
+      return "Request was blocked. Ensure the backend allows your extension origin.";
+    }
+    return message;
+  }
+
+  /**
+   * Show error message and reset to empty state.
+   */
+  function showErrorAndReset(message) {
+    showEmpty();
+    showError(message);
+    refreshSelectionFromPage();
+  }
+
+  /**
+   * Display an error message in the popup (in empty state).
+   */
+  function showError(message) {
+    hideError();
+    if (!emptyState || !message) return;
+    const errDiv = document.createElement("div");
+    errDiv.id = "analyzeError";
+    errDiv.className =
+      "mb-3 p-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-800";
+    errDiv.textContent = message;
+    emptyState.insertBefore(errDiv, emptyState.firstChild);
+  }
+
+  /**
+   * Remove any displayed error message.
+   */
+  function hideError() {
+    const existing = document.getElementById("analyzeError");
+    if (existing) existing.remove();
+  }
 
   btnClear.addEventListener("click", () => {
     showEmpty();
+    hideError();
 
     if (selectedTextValue) {
       selectedTextValue.textContent = "Nothing selected yet.";
@@ -171,8 +438,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     disableAnalyzeButton();
     clearSelectionOnPage();
+    clearHighlightsOnPage();
   });
-  btnCancelLoading.addEventListener("click", () => showEmpty());
+  btnCancelLoading.addEventListener("click", () => {
+    showEmpty();
+    hideError();
+  });
 
   if (btnOpenHistory) {
     btnOpenHistory.addEventListener("click", () => {
@@ -236,12 +507,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const fallbackMessage =
       popupSettings.analysisMode === "selection_fallback"
-        ? "No text selected. Fallback mode is on—page content may be used when you click Analyze (when implemented)."
+        ? "No text selected. Fallback mode: page content will be analyzed when you click Analyze."
         : "Nothing selected yet.";
 
     // Default UI while we attempt to read selection
     selectedTextValue.textContent = fallbackMessage;
-    disableAnalyzeButton();
+    // In selection_only mode, disable until text is selected. In fallback mode, enable so user can analyze page content.
+    if (popupSettings.analysisMode === "selection_fallback") {
+      enableAnalyzeButton();
+    } else {
+      disableAnalyzeButton();
+    }
 
     if (typeof chrome === "undefined" || !chrome.tabs || !chrome.tabs.query) {
       selectedTextValue.textContent =
@@ -292,7 +568,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (selectionHeader) {
               selectionHeader.textContent = "No text selected";
             }
-            disableAnalyzeButton();
+            // In fallback mode, keep Analyze enabled (page content can be used)
+            if (popupSettings.analysisMode !== "selection_fallback") {
+              disableAnalyzeButton();
+            } else {
+              enableAnalyzeButton();
+            }
           }
         }
       );
@@ -390,31 +671,8 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .join(" ");
 
-    // Toggle colors: fake uses fake progress color, real uses real progress color
-    const toggleBg = currentMode === "real" ? getThemeForMode("real").indicatorProgress : getThemeForMode("fake").indicatorProgress;
-
     resultState.innerHTML = `
       <section>
-        <!-- TEMP toggle (dummy only) -->
-        <div class="flex items-center justify-end">
-          <div class="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-2 py-1">
-            <span class="text-[11px] font-semibold ${currentMode === "fake" ? "text-[#1e2c3e]" : "text-gray-400"}">Fake</span>
-            <button
-              id="modeToggle"
-              type="button"
-              class="relative h-6 w-11 rounded-full transition"
-              style="background:${toggleBg};"
-              aria-label="Toggle result mode"
-            >
-              <span
-                class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition"
-                style="left:${currentMode === "real" ? "24px" : "2px"};"
-              ></span>
-            </button>
-            <span class="text-[11px] font-semibold ${currentMode === "real" ? "text-[#1e2c3e]" : "text-gray-400"}">Real</span>
-          </div>
-        </div>
-
         <div class="mt-2 text-base font-bold text-[#1e2c3e]">Article: “${escapeHtml(data.articleTitle)}”</div>
         <div class="mt-1 text-xs text-gray-400 break-all">Source: ${escapeHtml(data.sourceUrl)}</div>
 
@@ -493,19 +751,9 @@ document.addEventListener("DOMContentLoaded", () => {
       </section>
     `;
 
-    // Toggle handler
-    const modeToggle = document.getElementById("modeToggle");
-    if (modeToggle) {
-      modeToggle.addEventListener("click", () => {
-        currentMode = currentMode === "real" ? "fake" : "real";
-        renderResult(currentMode === "real" ? dummyRealResult : dummyFakeResult);
-        document.querySelector(".popup-main")?.scrollTo({ top: 0, behavior: "auto" });
-      });
-    }
-
     // Back
     const btnBack = document.getElementById("btnBack");
-    if (btnBack) btnBack.addEventListener("click", showEmpty);
+    if (btnBack) btnBack.addEventListener("click", () => { hideError(); showEmpty(); });
 
     // Report issue (dummy)
     const btnReport = document.getElementById("btnReportIssue");
