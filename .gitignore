@@ -124,6 +124,7 @@ dist
 
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
+.vscode/
 
 # yarn v3
 .pnp.*
@@ -137,3 +138,14 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# -----------------------------------------------------------------------------
+# FAKE-SHA Project
+# -----------------------------------------------------------------------------
+
+# Backend (Python)
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+*.pyc
+backend/.env
