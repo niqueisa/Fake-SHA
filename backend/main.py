@@ -21,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import AnalyzeRequest
-from mock_analyzer import analyze_text
+from svm_analyzer import analyze_text
 from record_store import save_analysis_record
 
 # -----------------------------------------------------------------------------
@@ -69,7 +69,7 @@ def analyze(request: AnalyzeRequest):
     Accepts text, url, title, and mode from the browser extension.
     Returns verdict (FAKE/REAL), confidence, summary, indicators, and tokens.
 
-    The analysis logic lives in mock_analyzer.py and can be replaced
+    The analysis logic lives in svm_analyzer.py and can be replaced
     with a real ML model without changing this route.
 
     When Supabase is configured, the analysis record is stored for later
