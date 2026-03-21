@@ -114,8 +114,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // Remove trailing slash from backend URL for clean /analyze path
-      const baseUrl = backendUrl.replace(/\/+$/, "");
+      const baseUrl = (window.FakeShaApi && window.FakeShaApi.normalizeBackendBaseUrl
+        ? window.FakeShaApi.normalizeBackendBaseUrl(backendUrl)
+        : backendUrl.replace(/\/+$/, ""));
 
       // 2. Get text to analyze: selected text first, or page content in fallback mode
       let textToAnalyze = await getSelectedTextFromPage();
@@ -152,29 +153,11 @@ document.addEventListener("DOMContentLoaded", () => {
         mode: settings.analysisMode || "selection_only",
       };
 
-      // 5. Send POST request to backend
-      const response = await fetch(`${baseUrl}/analyze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(
-          `Server error (${response.status}): ${errText.slice(0, 100) || "Unknown error"}`
-        );
+      // 5. Send POST request to backend (shared helper)
+      if (!window.FakeShaApi || typeof window.FakeShaApi.postAnalyze !== "function") {
+        throw new Error("Extension API module missing (shared/api.js).");
       }
-
-      const jsonText = await response.text();
-      let backendResult;
-      try {
-        backendResult = JSON.parse(jsonText);
-      } catch (e) {
-        throw new Error("Invalid JSON response from backend.");
-      }
+      const backendResult = await window.FakeShaApi.postAnalyze(baseUrl, payload);
 
       // 6. Map backend response to popup's render format
       const mappedData = mapBackendResponseToPopupFormat(backendResult, {
@@ -447,13 +430,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnOpenHistory) {
     btnOpenHistory.addEventListener("click", () => {
-      window.location.href = "history.html";
+      window.location.href = "../history/history.html";
     });
   }
 
   if (btnOpenSettings) {
     btnOpenSettings.addEventListener("click", () => {
-      window.location.href = "settings.html";
+      window.location.href = "../settings/settings.html";
     });
   }
 

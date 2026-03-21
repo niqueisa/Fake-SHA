@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "FAKE-SHA Browser Extension",
   "scripts": {
-  "dev:css": "tailwindcss -i ./ui/input.css -o ./extension/styles.css --watch",
-  "build:css": "tailwindcss -i ./ui/input.css -o ./extension/styles.css --minify"
+  "dev:css": "tailwindcss -i ./ui/input.css -o ./extension/assets/styles.css --watch",
+  "build:css": "tailwindcss -i ./ui/input.css -o ./extension/assets/styles.css --minify"
   },
   "repository": {
     "type": "git",

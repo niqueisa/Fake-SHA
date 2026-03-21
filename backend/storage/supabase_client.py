@@ -21,20 +21,12 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Cached client instance (lazy init)
 _supabase_client: Optional[object] = None
 
 
 def get_supabase_client():
     """
     Get the Supabase client, or None if not configured.
-
-    Reads SUPABASE_URL and SUPABASE_KEY from the environment.
-    If either is missing or empty, returns None. This allows the backend
-    to run without Supabase (e.g. for local testing or if DB is optional).
-
-    Returns:
-        Supabase Client instance, or None if not configured.
     """
     global _supabase_client
 

@@ -41,8 +41,15 @@ FAKE-SHA consists of two primary components:
 
 ```
 FAKE-SHA/
-├── extension/        # Browser extension (popup, settings, history, content script)
-├── backend/          # FastAPI API + Supabase integration (see backend/README.md)
+├── extension/        # Browser extension (see subfolders below)
+│   ├── popup/        # Popup UI
+│   ├── settings/     # Settings page
+│   ├── history/      # History page
+│   ├── content/      # Content script(s)
+│   ├── shared/       # Shared JS (e.g. backend API client)
+│   └── assets/       # CSS, icons, logo (Tailwind output: assets/styles.css)
+├── backend/          # FastAPI API + Supabase (see backend/README.md)
+├── data/             # Train/validation/test CSVs
 ├── ui/               # Tailwind CSS source (input.css)
 ├── package.json      # Tailwind build scripts
 └── README.md         # This file
@@ -70,7 +77,7 @@ FAKE-SHA/
    - Development (watch mode): `npm run dev:css`
    - Production: `npm run build:css`
 
-   Output: `extension/styles.css` (do not edit manually)
+   Output: `extension/assets/styles.css` (do not edit manually)
 
 ### Backend (API)
 

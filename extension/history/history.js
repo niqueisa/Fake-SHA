@@ -401,12 +401,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   btnBack.addEventListener("click", () => {
-    window.location.href = "popup.html";
+    window.location.href = "../popup/popup.html";
   });
 
   if (btnOpenSettings) {
     btnOpenSettings.addEventListener("click", () => {
-      window.location.href = "settings.html";
+      window.location.href = "../settings/settings.html";
     });
   }
 

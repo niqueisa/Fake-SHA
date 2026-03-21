@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnBackToPopup) {
     btnBackToPopup.addEventListener("click", () => {
-      window.location.href = "popup.html";
+      window.location.href = "../popup/popup.html";
     });
   }
 
@@ -163,13 +163,20 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Trim trailing slashes for clean /health path
-    const baseUrl = rawUrl.replace(/\/+$/, "");
-    let healthUrl;
+    let baseUrl;
     try {
-      healthUrl = new URL("/health", baseUrl).href;
+      baseUrl = window.FakeShaApi
+        ? window.FakeShaApi.normalizeBackendBaseUrl(rawUrl)
+        : rawUrl.replace(/\/+$/, "");
+      new URL("/health", baseUrl);
     } catch (e) {
       testConnectionStatus.textContent = "Invalid backend URL.";
+      testConnectionStatus.style.color = "#b91c1c";
+      return;
+    }
+
+    if (!window.FakeShaApi || typeof window.FakeShaApi.getHealth !== "function") {
+      testConnectionStatus.textContent = "Extension API module missing.";
       testConnectionStatus.style.color = "#b91c1c";
       return;
     }
@@ -186,23 +193,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS);
 
-      const response = await fetch(healthUrl, {
-        method: "GET",
-        signal: controller.signal,
-      });
+      await window.FakeShaApi.getHealth(baseUrl, controller.signal);
 
       clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const text = await response.text();
-      try {
-        JSON.parse(text);
-      } catch (e) {
-        throw new Error("Malformed JSON response");
-      }
 
       testConnectionStatus.textContent = "Connected to backend.";
       testConnectionStatus.style.color = "#15803d";
