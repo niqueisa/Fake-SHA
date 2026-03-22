@@ -2,7 +2,7 @@
 FAKE-SHA Backend - FastAPI Application
 
 REST API for fake news detection. Analysis is delegated to `inference/`
-(SVM now; RoBERTa later).
+(SVM, RoBERTa, or mock).
 
 Endpoints:
     GET  /health  - Health check for monitoring and CORS preflight
@@ -17,10 +17,12 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Load .env file for local development (SUPABASE_URL, SUPABASE_KEY)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from inference.factory import analyze_text
+from inference.roberta.loader import RoBERTaArtifactError, RoBERTaDependencyError
 from schemas.models import AnalyzeRequest
 from storage.record_store import save_analysis_record
 
@@ -42,6 +44,18 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(RoBERTaArtifactError)
+def roberta_artifacts_unavailable(_request: Request, exc: RoBERTaArtifactError) -> JSONResponse:
+    """RoBERTa selected but model files are missing or incomplete under artifacts/roberta/."""
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(RoBERTaDependencyError)
+def roberta_dependencies_missing(_request: Request, exc: RoBERTaDependencyError) -> JSONResponse:
+    """torch/transformers not installed."""
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -58,13 +72,15 @@ def analyze(request: AnalyzeRequest):
     """
     Analyze article text for potential fake news.
 
-    Analyzer is selected via FAKE_SHA_ANALYZER (default: svm).
+    Analyzer: optional request field ``analyzer`` (svm | roberta | mock), or
+    environment variable FAKE_SHA_ANALYZER when ``analyzer`` is omitted (default: svm).
     When Supabase is configured, the analysis record is stored for later review.
     """
     result = analyze_text(
         text=request.text,
         title=request.title,
         url=request.url,
+        analyzer=request.analyzer,
     )
 
     save_analysis_record(
