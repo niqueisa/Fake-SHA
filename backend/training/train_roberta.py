@@ -12,10 +12,6 @@ Aligned with :mod:`inference.roberta` and :mod:`training.train_svm`:
   training for direct comparison with SVM on identical documents.
 - **Artifacts** — ``save_pretrained`` into ``backend/artifacts/roberta/`` (layout
   expected by :mod:`inference.roberta.loader`).
-
-Run from ``backend/`` (GPU recommended):
-
-  python -m training.train_roberta
 """
 
 from __future__ import annotations
@@ -242,7 +238,6 @@ def main() -> None:
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=_compute_metrics_builder(),
     )

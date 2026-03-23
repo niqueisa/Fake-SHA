@@ -86,3 +86,21 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
         indicators=indicators,
         tokens=[],
     )
+
+
+def roberta_smoke_test() -> AnalyzeResponse:
+    """
+    Lightweight internal test to verify:
+    - artifacts load successfully
+    - model forward pass runs
+    - output format is valid
+    """
+    sample_text = "Breaking news: this story claims an incredible event happened."
+    resp = analyze_text(sample_text, title="Smoke test", url="https://example.com")
+
+    if resp.verdict not in ("FAKE", "REAL"):
+        raise RuntimeError(f"Unexpected verdict from RoBERTa smoke test: {resp.verdict!r}")
+    if not (0.0 <= resp.confidence <= 1.0):
+        raise RuntimeError(f"Confidence out of range from RoBERTa smoke test: {resp.confidence}")
+
+    return resp
