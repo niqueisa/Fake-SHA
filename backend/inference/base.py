@@ -2,7 +2,7 @@
 Shared analyzer interface (for documentation and type hints).
 
 New backends (e.g. RoBERTa) should expose the same callable shape as
-`analyze_text(text, title="", url="") -> AnalyzeResponse`.
+`analyze_text(text, title="", url="", analyzer=None) -> AnalyzeResponse` (factory).
 """
 
 from __future__ import annotations

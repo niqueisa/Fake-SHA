@@ -5,6 +5,8 @@ These Pydantic models define the API contract for the analyze endpoint.
 They ensure type safety and clear documentation for the frontend integration.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -22,6 +24,13 @@ class AnalyzeRequest(BaseModel):
     mode: str = Field(
         default="selection_only",
         description="Analysis mode: 'selection_only' or 'selection_fallback'",
+    )
+    analyzer: Literal["svm", "roberta", "mock"] | None = Field(
+        default=None,
+        description=(
+            "Which backend to use for this request. "
+            "If omitted, uses environment variable FAKE_SHA_ANALYZER (default: svm)."
+        ),
     )
 
 

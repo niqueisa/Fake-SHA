@@ -1,1 +1,1 @@
-"""Inference backends (SVM, future RoBERTa) and analyzer factory."""
+"""Inference backends (SVM, RoBERTa, mock) and analyzer factory."""
