@@ -21,6 +21,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from core.config import UnknownAnalyzerBackendError
 from inference.factory import analyze_text
 from inference.roberta.loader import RoBERTaArtifactError, RoBERTaDependencyError
 from schemas.models import AnalyzeRequest
@@ -54,6 +55,12 @@ def roberta_artifacts_unavailable(_request: Request, exc: RoBERTaArtifactError) 
 def roberta_dependencies_missing(_request: Request, exc: RoBERTaDependencyError) -> JSONResponse:
     """torch/transformers not installed."""
     return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(UnknownAnalyzerBackendError)
+def unknown_analyzer_backend(_request: Request, exc: UnknownAnalyzerBackendError) -> JSONResponse:
+    """Invalid FAKE_SHA_ANALYZER or analyzer override (typos, unsupported values)."""
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 # -----------------------------------------------------------------------------

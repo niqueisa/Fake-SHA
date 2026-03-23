@@ -1,30 +1,34 @@
 """
 FAKE-SHA thesis: Train an SVM (LinearSVC) fake-news classifier.
 
+This pipeline is aligned with the RoBERTa training plan:
+
+- **Input text** — Uses :func:`core.model_input.build_model_input` (title, URL,
+  body joined with blank lines; empty fields omitted), matching inference for
+  both SVM and RoBERTa. Optional CSV columns ``title`` and ``url``; if absent,
+  they are treated as empty (body-only), same as missing fields at runtime.
+- **Labels** — ``0`` = FAKE, ``1`` = REAL (also accepts FAKE/REAL strings).
+- **Splits** — Separate ``train.csv`` / ``valid.csv`` (or ``val.csv``) /
+  ``test.csv``; TF-IDF is fit on **train** only; threshold is tuned on
+  **validation**; final metrics on **test** for comparison with RoBERTa on the
+  same held-out set.
+- **Metrics** — Accuracy, precision/recall/F1 for FAKE (pos_label=0), plus
+  macro F1; classification report on the test split.
+- **Class imbalance** — ``--class-weight balanced`` (default) or ``none``.
+- **Reproducibility** — ``--seed`` (default 42) for NumPy and LinearSVC.
+
 Saves artifacts for the FastAPI backend under:
+
   - backend/artifacts/svm/svm_model.pkl
   - backend/artifacts/svm/tfidf_vectorizer.pkl
   - backend/artifacts/svm/svm_decision_threshold.pkl
 
-Run from repo root:
+Run from ``backend/``:
+
   python -m training.train_svm
 
-Or from backend/:
-  python -m training.train_svm
-
-Assumed dataset schema (CSV):
-  - text: string (article or selected text) OR article: string
-  - label: either "FAKE"/"REAL" or 0/1
-
-Preprocessing:
-  - lowercase
-  - normalize whitespace
-  - drop rows with missing text/label
-  - map labels: FAKE -> 0, REAL -> 1
-
-Feature extraction:
-  - TF-IDF (TfidfVectorizer), fitted on training split only
-  - vectorizer reused to transform validation/test split
+Feature extraction: TF-IDF (TfidfVectorizer), fitted on training split only;
+vectorizer reused for validation/test (same as a deployed service transform).
 """
 
 from __future__ import annotations
@@ -34,7 +38,6 @@ from pathlib import Path
 
 import joblib
 import numpy as np
-import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import (
     accuracy_score,
@@ -45,88 +48,16 @@ from sklearn.metrics import (
 )
 from sklearn.svm import LinearSVC
 
-
-LABEL_MAP = {
-    "FAKE": 0,
-    "REAL": 1,
-    "0": 0,
-    "1": 1,
-}
+from training.data_io import load_classification_csv
 
 
-def load_data(csv_path: Path) -> tuple[list[str], np.ndarray]:
-    """
-    Load a dataset CSV and apply required preprocessing + label normalization.
-
-    Returns:
-        (texts, labels) where labels are integers in {0, 1}
-    """
-    df = pd.read_csv(csv_path)
-
-    if "article" in df.columns:
-        text_col = "article"
-    elif "text" in df.columns:
-        text_col = "text"
-    else:
-        raise ValueError(f"Missing required text column ('article' or 'text') in {csv_path}")
-
-    if "label" not in df.columns:
-        raise ValueError(f"Missing required column 'label' in {csv_path}")
-
-    df = df.copy()
-    df[text_col] = df[text_col].fillna("")
-    df = df.dropna(subset=["label"]).copy()
-
-    df[text_col] = df[text_col].astype(str)
-    df["label"] = df["label"].apply(normalize_label)
-
-    df[text_col] = preprocess_text(df[text_col])
-    df = df.dropna(subset=[text_col]).copy()
-
-    texts = df[text_col].tolist()
-    labels = df["label"].to_numpy(dtype=np.int64)
-
-    invalid_mask = (labels != 0) & (labels != 1)
-    if invalid_mask.any():
-        bad_values = df.loc[invalid_mask, "label"].head(10).tolist()
-        raise ValueError(
-            f"Found invalid labels in {csv_path}. Examples: {bad_values}"
-        )
-
-    return texts, labels
-
-
-def preprocess_text(text_series: pd.Series) -> pd.Series:
-    """
-    Apply thesis-required text preprocessing:
-      - lowercase
-      - remove extra whitespace
-      - strip leading/trailing whitespace
-    """
-    s = text_series.str.lower()
-    s = s.str.replace(r"\s+", " ", regex=True)
-    s = s.str.strip()
-    s = s.replace("", np.nan)
-    return s
-
-
-def normalize_label(raw_label) -> int:
-    """Convert dataset label into {0, 1}."""
-    if pd.isna(raw_label):
-        raise ValueError("Missing label encountered.")
-
-    if isinstance(raw_label, (int, np.integer)):
-        return int(raw_label)
-    if isinstance(raw_label, (float, np.floating)):
-        if raw_label in (0.0, 1.0):
-            return int(raw_label)
-        raise ValueError(f"Unexpected numeric label: {raw_label}")
-
-    s = str(raw_label).strip().upper()
-    if s in LABEL_MAP:
-        return LABEL_MAP[s]
-
-    raise ValueError(f"Unexpected label value: {raw_label}")
+def load_data(
+    csv_path: Path,
+    *,
+    article_only: bool = False,
+) -> tuple[list[str], np.ndarray]:
+    """Load CSV with TF-IDF preprocessing after :func:`core.model_input.build_model_input`."""
+    return load_classification_csv(csv_path, article_only=article_only, tfidf_preprocess=True)
 
 
 def train_model(
@@ -139,6 +70,7 @@ def train_model(
     max_df: float,
     C: float,
     class_weight: str | None,
+    random_state: int,
 ) -> tuple[LinearSVC, TfidfVectorizer]:
     """Fit TF-IDF vectorizer on training data only, then train LinearSVC."""
     vectorizer = TfidfVectorizer(
@@ -149,7 +81,12 @@ def train_model(
     )
     X_train = vectorizer.fit_transform(train_texts)
 
-    model = LinearSVC(C=C, class_weight=class_weight, max_iter=5000)
+    model = LinearSVC(
+        C=C,
+        class_weight=class_weight,
+        max_iter=5000,
+        random_state=random_state,
+    )
     model.fit(X_train, train_labels)
 
     return model, vectorizer
@@ -181,14 +118,16 @@ def evaluate_model(
     precision = precision_score(labels, preds, pos_label=0, zero_division=0)
     recall = recall_score(labels, preds, pos_label=0, zero_division=0)
     f1 = f1_score(labels, preds, pos_label=0, zero_division=0)
+    f1_macro = f1_score(labels, preds, average="macro", zero_division=0)
 
     print(f"\n=== {split_name} Evaluation ===")
     print(f"{split_name} true distribution: {true_dist} (expected balanced 0/1)")
     print(f"{split_name} pred distribution: {pred_dist} (skew indicates decision bias)")
-    print(f"Accuracy:  {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}")
-    print(f"Recall:    {recall:.4f}")
-    print(f"F1-score:  {f1:.4f}")
+    print(f"Accuracy:   {accuracy:.4f}")
+    print(f"Precision:  {precision:.4f} (FAKE, pos_label=0)")
+    print(f"Recall:     {recall:.4f}")
+    print(f"F1 (FAKE):  {f1:.4f}")
+    print(f"F1 (macro): {f1_macro:.4f}")
 
     print("\nClassification report:")
     print(
@@ -291,16 +230,35 @@ def parse_args() -> argparse.Namespace:
         choices=["balanced", "none"],
         help="Use class weights: 'balanced' (recommended) or 'none'.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for NumPy and LinearSVC (thesis reproducibility).",
+    )
+    parser.add_argument(
+        "--article-only",
+        action="store_true",
+        help="Ignore title/url columns and train on body text only (ablation / legacy CSVs).",
+    )
 
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    np.random.seed(args.seed)
 
-    train_texts, train_labels = load_data(args.train_csv)
-    val_texts, val_labels = load_data(args.val_csv)
-    test_texts, test_labels = load_data(args.test_csv)
+    load_kw = {"article_only": args.article_only}
+    train_texts, train_labels = load_data(args.train_csv, **load_kw)
+    val_texts, val_labels = load_data(args.val_csv, **load_kw)
+    test_texts, test_labels = load_data(args.test_csv, **load_kw)
+
+    print("\n=== Run configuration (align with RoBERTa training notes) ===")
+    print(f"seed={args.seed}, article_only={args.article_only}, class_weight={args.class_weight}")
+    print(f"train_csv={args.train_csv}")
+    print(f"val_csv={args.val_csv}")
+    print(f"test_csv={args.test_csv}")
 
     print_split_stats(train_labels, "Train")
     print_split_stats(val_labels, "Validation")
@@ -316,6 +274,7 @@ def main() -> None:
         max_df=args.max_df,
         C=args.C,
         class_weight=class_weight,
+        random_state=args.seed,
     )
     print(
         "\nTF-IDF config: "
@@ -385,5 +344,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    np.random.seed(42)
     main()

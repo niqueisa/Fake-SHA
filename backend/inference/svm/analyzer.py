@@ -16,6 +16,7 @@ from pathlib import Path
 import joblib
 
 from core.config import ARTIFACTS_SVM_DIR
+from core.model_input import build_model_input
 from inference.svm.preprocess import preprocess_document
 from schemas.models import AnalyzeResponse
 
@@ -54,14 +55,11 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     """
     Analyze text using the persisted SVM + TF-IDF model.
 
-    Args:
-        text: Article or selected content to analyze.
-        title: Reserved for future use (e.g. concatenation with body).
-        url: Reserved for future use.
+    Uses the same title / URL / body composition as RoBERTa training
+    (:func:`core.model_input.build_model_input`), then TF-IDF preprocessing.
     """
-    del title, url  # explicit unused for now
-
-    cleaned = preprocess_document(text)
+    combined = build_model_input(text, title=title, url=url)
+    cleaned = preprocess_document(combined)
     X = _TFIDF_VECTORIZER.transform([cleaned])
     score = float(_SVM_MODEL.decision_function(X)[0])
 

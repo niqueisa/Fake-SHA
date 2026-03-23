@@ -5,7 +5,7 @@ Expected layout (Hugging Face save_pretrained):
 
 - config.json, tokenizer files, and model.safetensors or pytorch_model.bin.
 
-RoBERTaBundle keeps model and tokenizer together so explainability code
+RoBERTaBundle keeps tokenizer, model, and compute device together so explainability code
 (e.g. SHAP) can wrap the same objects used at inference time.
 """
 
@@ -46,10 +46,11 @@ def _require_artifacts(model_dir: Path) -> None:
 
 @dataclass
 class RoBERTaBundle:
-    """Holds tokenizer + model for one forward pass (SHAP can reuse these references)."""
+    """Holds tokenizer + model + compute device (SHAP can reuse these references)."""
 
     tokenizer: Any
     model: Any
+    device: Any
 
 
 @lru_cache(maxsize=1)
@@ -62,6 +63,7 @@ def load_bundle() -> RoBERTaBundle:
         RoBERTaDependencyError: torch / transformers not installed.
     """
     try:
+        import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
     except ImportError as e:
         raise RoBERTaDependencyError(
@@ -72,7 +74,9 @@ def load_bundle() -> RoBERTaBundle:
     model_dir = ARTIFACTS_ROBERTA_DIR
     _require_artifacts(model_dir)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
     model = AutoModelForSequenceClassification.from_pretrained(str(model_dir))
     model.eval()
-    return RoBERTaBundle(tokenizer=tokenizer, model=model)
+    model.to(device)
+    return RoBERTaBundle(tokenizer=tokenizer, model=model, device=device)

@@ -49,8 +49,7 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     bundle = load_bundle()
     tokenizer = bundle.tokenizer
     model = bundle.model
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    device = bundle.device
 
     encoded = tokenizer(
         combined,
