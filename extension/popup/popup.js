@@ -667,7 +667,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <div class="min-w-0">
             <div class="text-sm font-extrabold tracking-wide" style="color:${theme.bannerText};">${escapeHtml(data.label)}</div>
-            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${data.confidence.toFixed(1)}%</span></div>
+            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${data.confidence.toFixed(2)}%</span></div>
           </div>
         </div>
 
