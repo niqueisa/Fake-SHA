@@ -225,7 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="min-w-0">
             <div class="text-sm font-extrabold tracking-wide" style="color:${theme.bannerText};">${escapeHtml(data.label)}</div>
-            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${confidenceVal.toFixed(1)}%</span></div>
+            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${confidenceVal.toFixed(3)}%</span></div>
           </div>
         </div>
 
@@ -340,7 +340,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
           : "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z";
 
-        const confidenceDisplay = `${confidenceNum.toFixed(1)}%`;
+        const confidenceDisplay = `${confidenceNum.toFixed(3)}%`;
 
         card.innerHTML = `
           <div class="flex items-start gap-3">
