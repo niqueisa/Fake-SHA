@@ -21,6 +21,7 @@ Run from ``backend/`` (GPU recommended):
 from __future__ import annotations
 
 import argparse
+import inspect
 from pathlib import Path
 
 import numpy as np
@@ -263,7 +264,7 @@ def main() -> None:
             print(f"Class weights (balanced): FAKE={w0:.4f}, REAL={w1:.4f} (counts FAKE={fake}, REAL={real})")
 
     use_fp16 = torch.cuda.is_available()
-    training_args = TrainingArguments(
+    training_kwargs = dict(
         output_dir=str(args.output_dir),
         learning_rate=args.lr,
         per_device_train_batch_size=args.train_batch_size,
@@ -271,7 +272,6 @@ def main() -> None:
         num_train_epochs=args.epochs,
         weight_decay=args.weight_decay,
         warmup_ratio=args.warmup_ratio,
-        evaluation_strategy="epoch",
         save_strategy=args.save_strategy,
         load_best_model_at_end=args.save_strategy == "epoch",
         metric_for_best_model="eval_f1_macro",
@@ -282,6 +282,13 @@ def main() -> None:
         save_total_limit=2,
         report_to="none",
     )
+    ta_params = inspect.signature(TrainingArguments.__init__).parameters
+    if "evaluation_strategy" in ta_params:
+        training_kwargs["evaluation_strategy"] = "epoch"
+    else:
+        training_kwargs["eval_strategy"] = "epoch"
+
+    training_args = TrainingArguments(**training_kwargs)
 
     trainer_kwargs = dict(
         model=model,
