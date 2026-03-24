@@ -36,7 +36,9 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     """
     import torch
 
-    combined = build_model_input(text, title=title, url=url)
+    # URL is intentionally excluded to avoid source-based shortcut learning;
+    # inference must match the current title+article training setup.
+    combined = build_model_input(text, title=title, url="")
     if not combined.strip():
         return AnalyzeResponse(
             verdict="REAL",
