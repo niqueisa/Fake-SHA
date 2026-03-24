@@ -149,22 +149,3 @@ backend/.venv/
 backend/__pycache__/
 *.pyc
 backend/.env
-
-# -----------------------------------------------------------------------------
-# FAKE-SHA ML Artifacts (deployment-ready vs training checkpoints)
-# -----------------------------------------------------------------------------
-
-# SVM: keep the inference artifacts used by inference/svm/analyzer.py.
-# Ignore any "full training run" duplicates.
-backend/artifacts/svm/svm_full/
-
-# RoBERTa: do NOT commit large weights or training checkpoints to GitHub.
-# Keep small inference metadata (config + tokenizer JSON) so the code can load
-# once weights are provided out-of-band (deployment step).
-backend/artifacts/roberta/checkpoint-*/
-backend/artifacts/roberta/model.safetensors
-backend/artifacts/roberta/pytorch_model.bin
-backend/artifacts/roberta/training_args.bin
-backend/artifacts/roberta/**/*.pt
-backend/artifacts/roberta/**/*.pth
-backend/artifacts/roberta/**/trainer_state.json
