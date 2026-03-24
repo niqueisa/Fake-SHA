@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from core.config import ARTIFACTS_ROBERTA_DIR, ROBERTA_MODEL_SOURCE
+from core.config import ARTIFACTS_ROBERTA_DIR
 
 
 class RoBERTaArtifactError(RuntimeError):
@@ -109,28 +109,22 @@ def load_bundle() -> RoBERTaBundle:
             "Install with: pip install torch transformers safetensors"
         ) from e
 
-    model_source = ROBERTA_MODEL_SOURCE
-    print(f"[FAKE-SHA][RoBERTa] Loading model source: {model_source}")
-
-    # If the source is a local directory, do a deterministic preflight check
-    # so failures are clear. If it's a HF repo id, let Transformers handle it.
-    model_dir = Path(model_source)
-    if model_dir.is_dir():
-        _require_artifacts(model_dir)
+    model_dir = ARTIFACTS_ROBERTA_DIR
+    _require_artifacts(model_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_source)
+        tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
     except Exception as e:
         raise RoBERTaArtifactError(
-            f"Failed to load RoBERTa tokenizer from {model_source}: {e}"
+            f"Failed to load RoBERTa tokenizer from {model_dir}: {e}"
         ) from e
 
     try:
-        model = AutoModelForSequenceClassification.from_pretrained(model_source)
+        model = AutoModelForSequenceClassification.from_pretrained(str(model_dir))
     except Exception as e:
         raise RoBERTaArtifactError(
-            f"Failed to load RoBERTa model weights from {model_source}: {e}"
+            f"Failed to load RoBERTa model weights from {model_dir}: {e}"
         ) from e
 
     _ensure_label_mapping(model)
