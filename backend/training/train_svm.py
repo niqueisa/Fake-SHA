@@ -3,10 +3,10 @@ FAKE-SHA thesis: Train an SVM (LinearSVC) fake-news classifier.
 
 This pipeline is aligned with the RoBERTa training plan:
 
-- **Input text** — Uses :func:`core.model_input.build_model_input` (title, URL,
-  body joined with blank lines; empty fields omitted), matching inference for
-  both SVM and RoBERTa. Optional CSV columns ``title`` and ``url``; if absent,
-  they are treated as empty (body-only), same as missing fields at runtime.
+- **Input text** — Uses :func:`core.model_input.build_model_input` with title
+  and body (URL intentionally excluded to reduce source-based shortcut
+  learning), matching inference for both SVM and RoBERTa. Optional ``title``
+  is treated as empty if absent (body-only), same as missing fields at runtime.
 - **Labels** — ``0`` = FAKE, ``1`` = REAL (also accepts FAKE/REAL strings).
 - **Splits** — Separate ``train.csv`` / ``valid.csv`` (or ``val.csv``) /
   ``test.csv``; TF-IDF is fit on **train** only; threshold is tuned on
@@ -239,7 +239,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--article-only",
         action="store_true",
-        help="Ignore title/url columns and train on body text only (ablation / legacy CSVs).",
+        help="Ignore title column and train on body text only (ablation / legacy CSVs).",
     )
 
     return parser.parse_args()

@@ -1,8 +1,11 @@
 """
 Shared CSV loading for SVM and RoBERTa training.
 
-Uses :func:`core.model_input.build_model_input` so both pipelines see the same
-strings as ``POST /analyze`` (optional ``title`` / ``url`` + body).
+Current experiments use dataset columns ``label``, ``title``, and ``article``.
+Composition is done via :func:`core.model_input.build_model_input` so training
+and inference share the same text-construction rules. URL handling remains
+optional/legacy and is excluded in current experiments to reduce source-based
+shortcut learning.
 
 - **SVM** — Applies TF-IDF-style lowercasing / whitespace normalization after composition.
 - **RoBERTa / transformers** — Uses composed text only (strip empty rows); no lowercasing,
@@ -61,11 +64,11 @@ def load_classification_csv(
     tfidf_preprocess: bool = False,
 ) -> tuple[list[str], np.ndarray]:
     """
-    Load ``label`` + ``article`` or ``text``, optionally ``title`` / ``url``.
+    Load classification CSV for FAKE-SHA training.
 
     Args:
         csv_path: Training, validation, or test CSV.
-        article_only: If True, ignore ``title`` / ``url`` columns.
+        article_only: If True, ignore ``title`` and use article only.
         tfidf_preprocess: If True, apply :func:`preprocess_tfidf_style` (SVM). If False,
             strip only and drop empty strings (RoBERTa / inference-aligned).
 
@@ -77,9 +80,10 @@ def load_classification_csv(
     if "article" in df.columns:
         text_col = "article"
     elif "text" in df.columns:
+        # Legacy compatibility for older datasets; current experiments use `article`.
         text_col = "text"
     else:
-        raise ValueError(f"Missing required text column ('article' or 'text') in {csv_path}")
+        raise ValueError(f"Missing required text column ('article') in {csv_path}")
 
     if "label" not in df.columns:
         raise ValueError(f"Missing required column 'label' in {csv_path}")
@@ -96,10 +100,9 @@ def load_classification_csv(
         titles = pd.Series([""] * len(df), index=df.index)
     else:
         titles = df["title"].fillna("").astype(str)
-    if article_only or "url" not in df.columns:
-        urls = pd.Series([""] * len(df), index=df.index)
-    else:
-        urls = df["url"].fillna("").astype(str)
+    # URL is intentionally excluded in the current experiment setup to avoid
+    # source-based shortcut learning; keep empty-url behavior for compatibility.
+    urls = pd.Series([""] * len(df), index=df.index)
 
     composed = pd.Series(
         [build_model_input(str(b), title=str(t), url=str(u)) for b, t, u in zip(bodies, titles, urls)],
