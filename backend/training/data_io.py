@@ -16,7 +16,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from core.model_input import build_model_input
+try:
+    from core.model_input import build_model_input
+except ModuleNotFoundError:
+    from backend.core.model_input import build_model_input
 
 LABEL_MAP = {
     "FAKE": 0,

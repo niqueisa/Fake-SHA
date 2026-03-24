@@ -48,7 +48,10 @@ from sklearn.metrics import (
 )
 from sklearn.svm import LinearSVC
 
-from training.data_io import load_classification_csv, load_classification_hf
+try:
+    from training.data_io import load_classification_csv, load_classification_hf
+except ModuleNotFoundError:
+    from backend.training.data_io import load_classification_csv, load_classification_hf
 
 
 def load_data(
