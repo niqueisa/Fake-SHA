@@ -149,3 +149,27 @@ backend/.venv/
 backend/__pycache__/
 *.pyc
 backend/.env
+
+# Python caches / tooling
+**/__pycache__/
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Training artifacts (keep placeholder files only)
+backend/artifacts/svm/*.pkl
+backend/artifacts/roberta/checkpoint-*/
+backend/artifacts/roberta/pytorch_model*.bin
+backend/artifacts/roberta/model.safetensors
+backend/artifacts/roberta/tokenizer.json
+backend/artifacts/roberta/tokenizer_config.json
+backend/artifacts/roberta/special_tokens_map.json
+backend/artifacts/roberta/training_args.bin
+backend/artifacts/roberta/trainer_state.json
+backend/artifacts/roberta/optimizer.pt
+backend/artifacts/roberta/scheduler.pt
+backend/artifacts/roberta/rng_state*.pth
+!backend/artifacts/svm/.keep
+!backend/artifacts/roberta/.keep
+!backend/artifacts/roberta/,keep
