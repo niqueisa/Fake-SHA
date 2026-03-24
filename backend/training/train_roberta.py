@@ -4,7 +4,7 @@ FAKE-SHA thesis: Fine-tune a RoBERTa (or compatible) sequence classifier.
 Aligned with :mod:`inference.roberta` and :mod:`training.train_svm`:
 
 - **CSV loading** — :func:`training.data_io.load_classification_csv` with
-  ``tfidf_preprocess=False`` (same strings as inference; uses ``title`` + ``article``).
+  ``tfidf_preprocess=False`` (same strings as inference; optional ``title`` / ``url``).
 - **Labels** — ``0`` = FAKE, ``1`` = REAL; saved model has ``id2label`` / ``label2id``
   so the API :func:`inference.roberta.analyzer._label_to_verdict` maps correctly.
 - **Splits** — Same default paths as ``train_svm`` (``train.csv``, ``valid.csv`` or
@@ -133,7 +133,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--article-only",
         action="store_true",
-        help="Ignore title column and train on article only (same flag as train_svm).",
+        help="Ignore title/url columns (same flag as train_svm).",
     )
     parser.add_argument(
         "--save-strategy",
