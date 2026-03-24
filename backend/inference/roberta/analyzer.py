@@ -7,6 +7,15 @@ same model and tokenizer without changing the API surface.
 
 from __future__ import annotations
 
+import json
+from functools import lru_cache
+from pathlib import Path
+
+try:
+    from core.config import ARTIFACTS_ROBERTA_DIR
+except ModuleNotFoundError:
+    from backend.core.config import ARTIFACTS_ROBERTA_DIR
+
 from .loader import load_bundle
 from .preprocess import build_model_input
 from schemas.models import AnalyzeResponse
@@ -26,6 +35,20 @@ def _label_to_verdict(model, class_index: int) -> str:
     if int(getattr(model.config, "num_labels", 2)) == 2:
         return "REAL" if class_index == 1 else "FAKE"
     return "REAL"
+
+
+@lru_cache(maxsize=1)
+def _load_temperature(model_dir: Path = ARTIFACTS_ROBERTA_DIR) -> float:
+    """Load scalar temperature for logit scaling; fallback to 1.0 on any issue."""
+    path = model_dir / "temperature.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        value = float(data.get("temperature", 1.0))
+        if value <= 0:
+            return 1.0
+        return value
+    except Exception:
+        return 1.0
 
 
 def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
@@ -50,6 +73,7 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     tokenizer = bundle.tokenizer
     model = bundle.model
     device = bundle.device
+    temperature = _load_temperature()
 
     encoded = tokenizer(
         combined,
@@ -64,7 +88,8 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
         outputs = model(**encoded)
         logits = outputs.logits
 
-    probs = torch.softmax(logits, dim=-1)[0]
+    scaled_logits = logits / temperature
+    probs = torch.softmax(scaled_logits, dim=-1)[0]
     pred_idx = int(torch.argmax(probs).item())
     verdict = _label_to_verdict(model, pred_idx)
     confidence = float(probs[pred_idx].item())
