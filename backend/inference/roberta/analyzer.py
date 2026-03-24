@@ -70,7 +70,6 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     pred_idx = int(torch.argmax(probs).item())
     verdict = _label_to_verdict(model, pred_idx)
     confidence = float(probs[pred_idx].item())
-    confidence = min(confidence, 0.999)  # Display stability: transformers can output overconfident softmax probabilities
     confidence = max(0.0, min(1.0, confidence))
 
     # Debug output for thesis integration:
