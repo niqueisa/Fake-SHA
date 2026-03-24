@@ -37,8 +37,15 @@ from transformers import (
     set_seed,
 )
 
-from core.config import ARTIFACTS_ROBERTA_DIR
-from training.data_io import load_classification_csv, load_classification_hf
+try:
+    from core.config import ARTIFACTS_ROBERTA_DIR
+except ModuleNotFoundError:
+    from backend.core.config import ARTIFACTS_ROBERTA_DIR
+
+try:
+    from training.data_io import load_classification_csv, load_classification_hf
+except ModuleNotFoundError:
+    from backend.training.data_io import load_classification_csv, load_classification_hf
 
 ID2LABEL = {0: "FAKE", 1: "REAL"}
 LABEL2ID = {"FAKE": 0, "REAL": 1}
@@ -295,10 +302,14 @@ def main() -> None:
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=_compute_metrics_builder(),
     )
+    trainer_params = inspect.signature(Trainer.__init__).parameters
+    if "tokenizer" in trainer_params:
+        trainer_kwargs["tokenizer"] = tokenizer
+    elif "processing_class" in trainer_params:
+        trainer_kwargs["processing_class"] = tokenizer
     if class_weights is not None:
         trainer = ClassWeightedTrainer(class_weights=class_weights, **trainer_kwargs)
     else:
