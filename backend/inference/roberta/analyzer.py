@@ -70,22 +70,6 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     confidence = float(probs[pred_idx].item())
     confidence = max(0.0, min(1.0, confidence))
 
-    # Debug output for thesis integration:
-    # - logits: raw model outputs (shape [2])
-    # - probs: softmax probabilities (shape [2], sum ~= 1)
-    # - pred_idx: chosen class index (0/1)
-    # - confidence: probability of chosen class (0..1)
-    try:
-        logits_dbg = logits.detach().cpu().tolist()
-        probs_dbg = probs.detach().cpu().tolist()
-    except Exception:
-        logits_dbg = "unavailable"
-        probs_dbg = "unavailable"
-    print(
-        f"[FAKE-SHA][RoBERTa][confidence-debug] logits={logits_dbg}, probs={probs_dbg}, "
-        f"pred_idx={pred_idx}, confidence={confidence}"
-    )
-
     indicators = [
         "Source Credibility",
         "Claim Verification",
@@ -97,7 +81,7 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
 
     return AnalyzeResponse(
         verdict=verdict,
-        confidence=float(confidence),
+        confidence=float(round(confidence, 4)),
         summary=summary,
         indicators=indicators,
         tokens=[],
