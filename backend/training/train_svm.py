@@ -48,7 +48,7 @@ from sklearn.metrics import (
 )
 from sklearn.svm import LinearSVC
 
-from training.data_io import load_classification_csv
+from training.data_io import load_classification_csv, load_classification_hf
 
 
 def load_data(
@@ -58,6 +58,23 @@ def load_data(
 ) -> tuple[list[str], np.ndarray]:
     """Load CSV with TF-IDF preprocessing after :func:`core.model_input.build_model_input`."""
     return load_classification_csv(csv_path, article_only=article_only, tfidf_preprocess=True)
+
+
+def load_data_hf(
+    dataset_name: str,
+    split: str,
+    *,
+    article_only: bool = False,
+    hf_revision: str | None = None,
+) -> tuple[list[str], np.ndarray]:
+    """Load Hugging Face dataset split with TF-IDF preprocessing."""
+    return load_classification_hf(
+        dataset_name,
+        split=split,
+        article_only=article_only,
+        tfidf_preprocess=True,
+        revision=hf_revision,
+    )
 
 
 def train_model(
@@ -215,6 +232,21 @@ def parse_args() -> argparse.Namespace:
         default=data_dir / "test.csv",
         help="Path to test CSV.",
     )
+    parser.add_argument(
+        "--hf-dataset",
+        type=str,
+        default=None,
+        help="Hugging Face dataset ID (e.g. username/fake-sha). If set, CSV paths are ignored.",
+    )
+    parser.add_argument("--hf-train-split", type=str, default="train")
+    parser.add_argument("--hf-val-split", type=str, default="validation")
+    parser.add_argument("--hf-test-split", type=str, default="test")
+    parser.add_argument(
+        "--hf-revision",
+        type=str,
+        default=None,
+        help="Optional Hugging Face dataset git revision (commit/tag/branch).",
+    )
 
     parser.add_argument("--max-features", type=int, default=5000)
     parser.add_argument("--ngram-min", type=int, default=1)
@@ -250,15 +282,43 @@ def main() -> None:
     np.random.seed(args.seed)
 
     load_kw = {"article_only": args.article_only}
-    train_texts, train_labels = load_data(args.train_csv, **load_kw)
-    val_texts, val_labels = load_data(args.val_csv, **load_kw)
-    test_texts, test_labels = load_data(args.test_csv, **load_kw)
+    if args.hf_dataset:
+        train_texts, train_labels = load_data_hf(
+            args.hf_dataset,
+            args.hf_train_split,
+            hf_revision=args.hf_revision,
+            **load_kw,
+        )
+        val_texts, val_labels = load_data_hf(
+            args.hf_dataset,
+            args.hf_val_split,
+            hf_revision=args.hf_revision,
+            **load_kw,
+        )
+        test_texts, test_labels = load_data_hf(
+            args.hf_dataset,
+            args.hf_test_split,
+            hf_revision=args.hf_revision,
+            **load_kw,
+        )
+    else:
+        train_texts, train_labels = load_data(args.train_csv, **load_kw)
+        val_texts, val_labels = load_data(args.val_csv, **load_kw)
+        test_texts, test_labels = load_data(args.test_csv, **load_kw)
 
     print("\n=== Run configuration (align with RoBERTa training notes) ===")
     print(f"seed={args.seed}, article_only={args.article_only}, class_weight={args.class_weight}")
-    print(f"train_csv={args.train_csv}")
-    print(f"val_csv={args.val_csv}")
-    print(f"test_csv={args.test_csv}")
+    if args.hf_dataset:
+        print(f"hf_dataset={args.hf_dataset}")
+        print(f"hf_train_split={args.hf_train_split}")
+        print(f"hf_val_split={args.hf_val_split}")
+        print(f"hf_test_split={args.hf_test_split}")
+        if args.hf_revision:
+            print(f"hf_revision={args.hf_revision}")
+    else:
+        print(f"train_csv={args.train_csv}")
+        print(f"val_csv={args.val_csv}")
+        print(f"test_csv={args.test_csv}")
 
     print_split_stats(train_labels, "Train")
     print_split_stats(val_labels, "Validation")

@@ -37,7 +37,7 @@ from transformers import (
 )
 
 from core.config import ARTIFACTS_ROBERTA_DIR
-from training.data_io import load_classification_csv
+from training.data_io import load_classification_csv, load_classification_hf
 
 ID2LABEL = {0: "FAKE", 1: "REAL"}
 LABEL2ID = {"FAKE": 0, "REAL": 1}
@@ -108,6 +108,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--val-csv", type=Path, default=val_csv_default)
     parser.add_argument("--test-csv", type=Path, default=data_dir / "test.csv")
     parser.add_argument(
+        "--hf-dataset",
+        type=str,
+        default=None,
+        help="Hugging Face dataset ID (e.g. username/fake-sha). If set, CSV paths are ignored.",
+    )
+    parser.add_argument("--hf-train-split", type=str, default="train")
+    parser.add_argument("--hf-val-split", type=str, default="validation")
+    parser.add_argument("--hf-test-split", type=str, default="test")
+    parser.add_argument(
+        "--hf-revision",
+        type=str,
+        default=None,
+        help="Optional Hugging Face dataset git revision (commit/tag/branch).",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=ARTIFACTS_ROBERTA_DIR,
@@ -161,15 +176,38 @@ def main() -> None:
             "The 'datasets' package is required. Install with: pip install datasets"
         ) from e
 
-    train_texts, train_labels = load_classification_csv(
-        args.train_csv, article_only=args.article_only, tfidf_preprocess=False
-    )
-    val_texts, val_labels = load_classification_csv(
-        args.val_csv, article_only=args.article_only, tfidf_preprocess=False
-    )
-    test_texts, test_labels = load_classification_csv(
-        args.test_csv, article_only=args.article_only, tfidf_preprocess=False
-    )
+    if args.hf_dataset:
+        train_texts, train_labels = load_classification_hf(
+            args.hf_dataset,
+            split=args.hf_train_split,
+            article_only=args.article_only,
+            tfidf_preprocess=False,
+            revision=args.hf_revision,
+        )
+        val_texts, val_labels = load_classification_hf(
+            args.hf_dataset,
+            split=args.hf_val_split,
+            article_only=args.article_only,
+            tfidf_preprocess=False,
+            revision=args.hf_revision,
+        )
+        test_texts, test_labels = load_classification_hf(
+            args.hf_dataset,
+            split=args.hf_test_split,
+            article_only=args.article_only,
+            tfidf_preprocess=False,
+            revision=args.hf_revision,
+        )
+    else:
+        train_texts, train_labels = load_classification_csv(
+            args.train_csv, article_only=args.article_only, tfidf_preprocess=False
+        )
+        val_texts, val_labels = load_classification_csv(
+            args.val_csv, article_only=args.article_only, tfidf_preprocess=False
+        )
+        test_texts, test_labels = load_classification_csv(
+            args.test_csv, article_only=args.article_only, tfidf_preprocess=False
+        )
 
     if set(np.unique(train_labels)) != {0, 1}:
         raise ValueError("Training set must include both classes: 0 (FAKE) and 1 (REAL).")
@@ -178,9 +216,17 @@ def main() -> None:
     print(f"model_name={args.model_name}")
     print(f"seed={args.seed}, article_only={args.article_only}, class_weight={args.class_weight}")
     print(f"epochs={args.epochs}, lr={args.lr}, max_length={args.max_length}")
-    print(f"train_csv={args.train_csv} (n={len(train_labels)})")
-    print(f"val_csv={args.val_csv} (n={len(val_labels)})")
-    print(f"test_csv={args.test_csv} (n={len(test_labels)})")
+    if args.hf_dataset:
+        print(f"hf_dataset={args.hf_dataset}")
+        print(f"hf_train_split={args.hf_train_split} (n={len(train_labels)})")
+        print(f"hf_val_split={args.hf_val_split} (n={len(val_labels)})")
+        print(f"hf_test_split={args.hf_test_split} (n={len(test_labels)})")
+        if args.hf_revision:
+            print(f"hf_revision={args.hf_revision}")
+    else:
+        print(f"train_csv={args.train_csv} (n={len(train_labels)})")
+        print(f"val_csv={args.val_csv} (n={len(val_labels)})")
+        print(f"test_csv={args.test_csv} (n={len(test_labels)})")
     print(f"output_dir={args.output_dir}")
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
@@ -225,7 +271,7 @@ def main() -> None:
         num_train_epochs=args.epochs,
         weight_decay=args.weight_decay,
         warmup_ratio=args.warmup_ratio,
-        eval_strategy="epoch",
+        evaluation_strategy="epoch",
         save_strategy=args.save_strategy,
         load_best_model_at_end=args.save_strategy == "epoch",
         metric_for_best_model="eval_f1_macro",
