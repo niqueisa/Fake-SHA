@@ -1,8 +1,7 @@
 """
 RoBERTa inference: same AnalyzeResponse contract as SVM and mock.
 
-Forward pass uses load_bundle() so SHAP or similar tools can later use the
-same model and tokenizer without changing the API surface.
+Confidence is computed using temperature scaling over logits for realistic probabilities.
 """
 
 from __future__ import annotations
@@ -10,6 +9,8 @@ from __future__ import annotations
 from .loader import load_bundle
 from .preprocess import build_model_input
 from schemas.models import AnalyzeResponse
+import torch
+import math
 
 
 def _label_to_verdict(model, class_index: int) -> str:
@@ -32,10 +33,9 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     """
     Run RoBERTa classification; returns verdict, confidence, summary, indicators, tokens.
 
-    tokens is left empty until SHAP integration (schema uses TokenResult).
+    Confidence uses temperature scaling to produce more realistic probabilities.
+    Tokens are left empty until SHAP integration (schema uses TokenResult).
     """
-    import torch
-
     combined = build_model_input(text, title=title, url=url)
     if not combined.strip():
         return AnalyzeResponse(
@@ -46,11 +46,13 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
             tokens=[],
         )
 
+    # Load model, tokenizer, device
     bundle = load_bundle()
     tokenizer = bundle.tokenizer
     model = bundle.model
     device = bundle.device
 
+    # Encode input
     encoded = tokenizer(
         combined,
         truncation=True,
@@ -60,15 +62,22 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     )
     encoded = {k: v.to(device) for k, v in encoded.items()}
 
+    # Forward pass
     with torch.no_grad():
         outputs = model(**encoded)
-        logits = outputs.logits
+        logits = outputs.logits[0]  # shape [num_labels]
 
-    probs = torch.softmax(logits, dim=-1)[0]
+    # Temperature scaling for confidence
+    temperature = 10.0  # adjust to calibrate confidence, higher = more conservative
+    scaled_logits = logits / temperature
+    probs = torch.softmax(scaled_logits, dim=-1)
+
     pred_idx = int(torch.argmax(probs).item())
     verdict = _label_to_verdict(model, pred_idx)
     confidence = float(probs[pred_idx].item())
-    confidence = max(0.0, min(1.0, confidence))
+
+    # Clamp confidence to avoid exact 0 or 1
+    confidence = max(0.01, min(0.99, confidence))
 
     indicators = [
         "Source Credibility",
