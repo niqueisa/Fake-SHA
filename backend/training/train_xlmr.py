@@ -291,7 +291,7 @@ def main() -> None:
             f"Resizing token embeddings from "
             f"{model.get_input_embeddings().num_embeddings} to {len(tokenizer)}"
         )
-    model.resize_token_embeddings(len(tokenizer))
+        model.resize_token_embeddings(len(tokenizer))
 
     def make_ds(texts: list[str], labels: np.ndarray) -> "Dataset":
         ds = Dataset.from_dict({"text": texts, "labels": labels.tolist()})
