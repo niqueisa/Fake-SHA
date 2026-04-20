@@ -2,20 +2,12 @@
 FAKE-SHA Backend - FastAPI Application
 
 REST API for fake news detection. Analysis is delegated to `inference/`
-(SVM, RoBERTa, or mock).
-
-Endpoints:
-    GET  /health  - Health check for monitoring and CORS preflight
-    POST /analyze - Analyze article text and return verdict
-
-Supabase: When SUPABASE_URL and SUPABASE_KEY are set, successful analyses
-are stored in the analysis_records table. Database failures do not affect
-the API response.
+(SVM, RoBERTa, XLM-RoBERTa, or mock).
 """
 
 from dotenv import load_dotenv
 
-load_dotenv()  # Load .env file for local development (SUPABASE_URL, SUPABASE_KEY)
+load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,7 +15,11 @@ from fastapi.responses import JSONResponse
 
 from core.config import UnknownAnalyzerBackendError
 from inference.factory import analyze_text
+
+# Import BOTH loaders
 from inference.roberta.loader import RoBERTaArtifactError, RoBERTaDependencyError
+from inference.xlmr.loader import XLMRArtifactError, XLMRDependencyError
+
 from schemas.models import AnalyzeRequest
 from storage.record_store import save_analysis_record
 
@@ -45,21 +41,35 @@ app.add_middleware(
 )
 
 
+# -----------------------------------------------------------------------------
+# Exception handlers
+# -----------------------------------------------------------------------------
+
+# RoBERTa
 @app.exception_handler(RoBERTaArtifactError)
-def roberta_artifacts_unavailable(_request: Request, exc: RoBERTaArtifactError) -> JSONResponse:
-    """RoBERTa selected but model files are missing or incomplete under artifacts/roberta/."""
+def roberta_artifacts_unavailable(_request: Request, exc: RoBERTaArtifactError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @app.exception_handler(RoBERTaDependencyError)
-def roberta_dependencies_missing(_request: Request, exc: RoBERTaDependencyError) -> JSONResponse:
-    """torch/transformers not installed."""
+def roberta_dependencies_missing(_request: Request, exc: RoBERTaDependencyError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
+# 🔥 XLM-R (NEW)
+@app.exception_handler(XLMRArtifactError)
+def xlmr_artifacts_unavailable(_request: Request, exc: XLMRArtifactError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(XLMRDependencyError)
+def xlmr_dependencies_missing(_request: Request, exc: XLMRDependencyError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+# Common
 @app.exception_handler(UnknownAnalyzerBackendError)
-def unknown_analyzer_backend(_request: Request, exc: UnknownAnalyzerBackendError) -> JSONResponse:
-    """Invalid FAKE_SHA_ANALYZER or analyzer override (typos, unsupported values)."""
+def unknown_analyzer_backend(_request: Request, exc: UnknownAnalyzerBackendError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
@@ -67,22 +77,17 @@ def unknown_analyzer_backend(_request: Request, exc: UnknownAnalyzerBackendError
 # Routes
 # -----------------------------------------------------------------------------
 
-
 @app.get("/health")
 def health():
-    """Health check endpoint."""
     return {"status": "ok", "message": "FAKE-SHA backend is running"}
 
 
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest):
     """
-    Analyze article text for potential fake news.
-
-    Analyzer: optional request field ``analyzer`` (svm | roberta | mock), or
-    environment variable FAKE_SHA_ANALYZER when ``analyzer`` is omitted (default: svm).
-    When Supabase is configured, the analysis record is stored for later review.
+    Analyzer: svm | roberta | xlmr | mock
     """
+
     result = analyze_text(
         text=request.text,
         title=request.title,
