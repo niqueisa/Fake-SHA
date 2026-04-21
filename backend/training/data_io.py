@@ -1,16 +1,18 @@
 """
-Shared CSV loading for SVM and RoBERTa training.
+Shared CSV / Hugging Face loading for SVM and transformer training.
 
 Uses :func:`core.model_input.build_model_input` so both pipelines see the same
 strings as ``POST /analyze`` (optional ``title`` / ``url`` + body).
 
 - **SVM** — Applies TF-IDF-style lowercasing / whitespace normalization after composition.
-- **RoBERTa / transformers** — Uses composed text only (strip empty rows); no lowercasing,
-  matching :mod:`inference.roberta` tokenization.
+- **Transformers** — Uses composed text only (strip empty rows); no lowercasing by default,
+  matching inference tokenization more closely.
 """
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -20,6 +22,7 @@ try:
     from core.model_input import build_model_input
 except ModuleNotFoundError:
     from backend.core.model_input import build_model_input
+
 
 LABEL_MAP = {
     "FAKE": 0,
@@ -35,7 +38,11 @@ def normalize_label(raw_label) -> int:
         raise ValueError("Missing label encountered.")
 
     if isinstance(raw_label, (int, np.integer)):
-        return int(raw_label)
+        value = int(raw_label)
+        if value in (0, 1):
+            return value
+        raise ValueError(f"Unexpected integer label: {raw_label}")
+
     if isinstance(raw_label, (float, np.floating)):
         if raw_label in (0.0, 1.0):
             return int(raw_label)
@@ -48,9 +55,43 @@ def normalize_label(raw_label) -> int:
     raise ValueError(f"Unexpected label value: {raw_label}")
 
 
+def _clean_text(value: object) -> str:
+    """
+    Normalize text safely for both TF-IDF and transformer tokenizers.
+
+    Goals:
+    - remove null/control chars that can break some tokenizers
+    - normalize unicode consistently
+    - collapse excessive whitespace
+    """
+    if pd.isna(value):
+        return ""
+
+    text = str(value)
+
+    # Normalize unicode
+    text = unicodedata.normalize("NFKC", text)
+
+    # Remove NULL bytes explicitly
+    text = text.replace("\x00", " ")
+
+    # Remove most control characters except common whitespace
+    text = "".join(
+        ch for ch in text
+        if ch == "\n" or ch == "\t" or ch == "\r" or unicodedata.category(ch)[0] != "C"
+    )
+
+    # Normalize line endings and whitespace
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+
+    return text.strip()
+
+
 def preprocess_tfidf_style(text_series: pd.Series) -> pd.Series:
     """Lowercase and collapse whitespace (SVM / TF-IDF training only)."""
-    s = text_series.str.lower()
+    s = text_series.astype(str).str.lower()
     s = s.str.replace(r"\s+", " ", regex=True)
     s = s.str.strip()
     s = s.replace("", np.nan)
@@ -78,21 +119,23 @@ def _prepare_classification_df(
         raise ValueError(f"Missing required column 'label' in {source_name}")
 
     df = df.copy()
-    df[text_col] = df[text_col].fillna("")
     df = df.dropna(subset=["label"]).copy()
 
-    df[text_col] = df[text_col].astype(str)
+    # Clean fields
+    df[text_col] = df[text_col].apply(_clean_text)
     df["label"] = df["label"].apply(normalize_label)
 
     bodies = df[text_col]
+
     if article_only or "title" not in df.columns:
-        titles = pd.Series([""] * len(df), index=df.index)
+        titles = pd.Series([""] * len(df), index=df.index, dtype=object)
     else:
-        titles = df["title"].fillna("").astype(str)
+        titles = df["title"].apply(_clean_text)
+
     if article_only or "url" not in df.columns:
-        urls = pd.Series([""] * len(df), index=df.index)
+        urls = pd.Series([""] * len(df), index=df.index, dtype=object)
     else:
-        urls = df["url"].fillna("").astype(str)
+        urls = df["url"].apply(_clean_text)
 
     composed = pd.Series(
         [
@@ -102,6 +145,10 @@ def _prepare_classification_df(
         index=df.index,
         dtype=object,
     )
+
+    # Clean once more after composition
+    composed = composed.apply(_clean_text)
+
     if tfidf_preprocess:
         composed = preprocess_tfidf_style(composed)
     else:
@@ -119,6 +166,9 @@ def _prepare_classification_df(
         bad_values = df.loc[invalid_mask, "label"].head(10).tolist()
         raise ValueError(f"Found invalid labels in {source_name}. Examples: {bad_values}")
 
+    if len(texts) == 0:
+        raise ValueError(f"No usable text rows found in {source_name} after preprocessing.")
+
     return texts, labels
 
 
@@ -135,7 +185,7 @@ def load_classification_csv(
         csv_path: Training, validation, or test CSV.
         article_only: If True, ignore ``title`` / ``url`` columns.
         tfidf_preprocess: If True, apply :func:`preprocess_tfidf_style` (SVM). If False,
-            strip only and drop empty strings (RoBERTa / inference-aligned).
+            strip only and drop empty strings (transformers / inference-aligned).
 
     Returns:
         (texts, labels) with labels in ``{0, 1}``.
@@ -173,7 +223,13 @@ def load_classification_hf(
 
     ds = load_dataset(dataset_name, split=split, revision=revision)
     df = ds.to_pandas()
-    source_name = f"{dataset_name}[{split}]" if revision is None else f"{dataset_name}[{split}]@{revision}"
+
+    source_name = (
+        f"{dataset_name}[{split}]"
+        if revision is None
+        else f"{dataset_name}[{split}]@{revision}"
+    )
+
     return _prepare_classification_df(
         df,
         source_name=source_name,
