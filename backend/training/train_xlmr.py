@@ -70,33 +70,7 @@ class ClassWeightedTrainer(Trainer):
         self.class_weights = class_weights
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        inputs = dict(inputs)
-
-        labels = inputs.pop("labels")
-        inputs.pop("token_type_ids", None)
-
-        if labels.dtype != torch.long:
-            labels = labels.long()
-
-        if labels.numel() > 0:
-            min_label = int(labels.min().item())
-            max_label = int(labels.max().item())
-            if min_label < 0 or max_label >= model.config.num_labels:
-                raise ValueError(
-                    f"Batch labels out of range: min={min_label}, max={max_label}, "
-                    f"num_labels={model.config.num_labels}"
-                )
-
-        if "input_ids" in inputs:
-            vocab_size = model.get_input_embeddings().num_embeddings
-            batch_min_id = int(inputs["input_ids"].min().item())
-            batch_max_id = int(inputs["input_ids"].max().item())
-            if batch_min_id < 0 or batch_max_id >= vocab_size:
-                raise ValueError(
-                    f"Batch input_ids out of range: min={batch_min_id}, "
-                    f"max={batch_max_id}, vocab_size={vocab_size}"
-                )
-
+        labels = inputs.get("labels")
         outputs = model(**inputs)
         logits = outputs.logits
         if self.class_weights is not None:
@@ -105,8 +79,7 @@ class ClassWeightedTrainer(Trainer):
             )
         else:
             loss_fct = torch.nn.CrossEntropyLoss()
-
-        loss = loss_fct(logits.view(-1, model.config.num_labels), labels.view(-1))
+        loss = loss_fct(logits.view(-1, 2), labels.view(-1))
         return (loss, outputs) if return_outputs else loss
 
 
@@ -155,84 +128,6 @@ def _print_split_report(name: str, labels: np.ndarray, preds: np.ndarray) -> Non
             target_names=["FAKE", "REAL"],
             zero_division=0,
         )
-    )
-
-
-def _normalize_labels(labels, split_name: str) -> np.ndarray:
-    arr = np.asarray(labels)
-
-    def norm_one(x):
-        if isinstance(x, str):
-            s = x.strip().upper()
-            if s == "FAKE":
-                return 0
-            if s == "REAL":
-                return 1
-        return int(x)
-
-    normalized = np.array([norm_one(x) for x in arr], dtype=np.int64)
-    uniq = set(np.unique(normalized).tolist())
-    print(f"{split_name} labels unique: {uniq}")
-    if not uniq.issubset({0, 1}):
-        raise ValueError(
-            f"{split_name} labels must be only 0/1 (FAKE/REAL). Found: {uniq}"
-        )
-    return normalized
-
-
-def _validate_token_ids(dataset, model, split_name: str) -> None:
-    num_embeddings = int(model.get_input_embeddings().num_embeddings)
-    max_seen = -1
-    min_seen = 10**18
-
-    for row in dataset:
-        ids = row["input_ids"]
-        if not ids:
-            continue
-        local_max = max(ids)
-        local_min = min(ids)
-        if local_max > max_seen:
-            max_seen = local_max
-        if local_min < min_seen:
-            min_seen = local_min
-
-    print(
-        f"{split_name} token id range: min={min_seen}, max={max_seen}, "
-        f"embedding_rows={num_embeddings}"
-    )
-    if max_seen >= num_embeddings or min_seen < 0:
-        raise ValueError(
-            f"{split_name} has token ids out of embedding range. "
-            f"min={min_seen}, max={max_seen}, embeddings={num_embeddings}"
-        )
-
-
-def _debug_first_batch(dataset, tokenizer, model, split_name: str = "Train") -> None:
-    collator = DataCollatorWithPadding(tokenizer=tokenizer)
-    sample = [dataset[i] for i in range(min(8, len(dataset)))]
-    batch = collator(sample)
-
-    print(f"\n=== {split_name} first batch debug ===")
-    print("input_ids shape:", tuple(batch["input_ids"].shape))
-    print("input_ids min/max:", int(batch["input_ids"].min()), int(batch["input_ids"].max()))
-    print("labels unique:", torch.unique(batch["labels"]).tolist())
-    print("tokenizer.pad_token_id:", tokenizer.pad_token_id)
-    print("model.config.pad_token_id:", model.config.pad_token_id)
-    print("embedding rows:", model.get_input_embeddings().num_embeddings)
-
-    if "token_type_ids" in batch:
-        print("token_type_ids unique:", torch.unique(batch["token_type_ids"]).tolist())
-
-    vocab_size = model.get_input_embeddings().num_embeddings
-    assert int(batch["input_ids"].min()) >= 0
-    assert int(batch["input_ids"].max()) < vocab_size, (
-        f"Batch input_ids out of range: max={int(batch['input_ids'].max())}, vocab={vocab_size}"
-    )
-
-    labels = batch["labels"]
-    assert int(labels.min()) >= 0
-    assert int(labels.max()) < model.config.num_labels, (
-        f"Batch labels out of range: max={int(labels.max())}, num_labels={model.config.num_labels}"
     )
 
 
@@ -383,45 +278,13 @@ def main() -> None:
 
     print(f"output_dir={args.output_dir}")
 
-    # DOST RoBERTa is safer with slow tokenizer and no fp16.
-    use_slow_tokenizer = args.model_name.startswith("dost-asti/")
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.model_name,
-        use_fast=not use_slow_tokenizer,
-    )
-
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     model = AutoModelForSequenceClassification.from_pretrained(
         args.model_name,
         num_labels=2,
         id2label=ID2LABEL,
         label2id=LABEL2ID,
     )
-
-    # Align tokenizer/model padding config safely.
-    if tokenizer.pad_token is None:
-        if model.config.pad_token_id is not None:
-            tokenizer.pad_token_id = model.config.pad_token_id
-        elif tokenizer.eos_token_id is not None:
-            tokenizer.pad_token = tokenizer.eos_token
-        elif tokenizer.sep_token_id is not None:
-            tokenizer.pad_token = tokenizer.sep_token
-        else:
-            raise ValueError("Tokenizer has no pad/eos/sep token available for padding.")
-
-    model.config.pad_token_id = tokenizer.pad_token_id
-    if hasattr(model, "roberta") and hasattr(model.roberta, "embeddings"):
-        model.roberta.embeddings.padding_idx = tokenizer.pad_token_id
-
-    print("len(tokenizer):", len(tokenizer))
-    print("model embeddings before resize:", model.get_input_embeddings().num_embeddings)
-    print("config vocab_size:", getattr(model.config, "vocab_size", None))
-    print("tokenizer.pad_token_id:", tokenizer.pad_token_id)
-    print("model.config.pad_token_id:", model.config.pad_token_id)
-
-    # Safe for all supported models; especially important for DOST checkpoint.
-    model.resize_token_embeddings(len(tokenizer))
-
-    print("model embeddings after resize:", model.get_input_embeddings().num_embeddings)
 
     def make_ds(texts: list[str], labels: np.ndarray) -> "Dataset":
         ds = Dataset.from_dict({"text": texts, "labels": labels.tolist()})
@@ -434,11 +297,6 @@ def main() -> None:
     train_ds = make_ds(train_texts, train_labels)
     val_ds = make_ds(val_texts, val_labels)
     test_ds = make_ds(test_texts, test_labels)
-
-    _validate_token_ids(train_ds, model, "Train")
-    _validate_token_ids(val_ds, model, "Validation")
-    _validate_token_ids(test_ds, model, "Test")
-    _debug_first_batch(train_ds, tokenizer, model, "Train")
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
