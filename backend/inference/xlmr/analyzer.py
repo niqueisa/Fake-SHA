@@ -1,101 +1,52 @@
 """
-XLM-RoBERTa inference: same AnalyzeResponse contract as SVM and mock.
+xlm-roberta inference: same api response shape as svm and mock.
 
-Confidence is computed using temperature scaling over logits for realistic probabilities.
+confidence is softmax on model logits (default T=1); see core.config for optional T.
 """
 
 from __future__ import annotations
 
-from .loader import load_bundle
+import logging
+
+from core.config import get_inference_temperature, get_xlmr_model_source
+from .loader import load_model
 from .preprocess import build_model_input
+from inference.transformer_common import (
+    build_transformer_analyze_response,
+    empty_input_response,
+    run_sequence_classification,
+)
 from schemas.models import AnalyzeResponse
-import torch
 
-
-def _label_to_verdict(model, class_index: int) -> str:
-    """Map predicted class id to API verdict using config.id2label when present."""
-    id2label = getattr(model.config, "id2label", None)
-    if isinstance(id2label, dict):
-        raw = id2label.get(class_index) or id2label.get(str(class_index))
-        if raw is not None:
-            s = str(raw).upper()
-            if "FAKE" in s or "FALSE" in s or s.strip() == "0":
-                return "FAKE"
-            if "REAL" in s or "TRUE" in s or s.strip() == "1":
-                return "REAL"
-
-    if int(getattr(model.config, "num_labels", 2)) == 2:
-        return "REAL" if class_index == 1 else "FAKE"
-
-    return "REAL"
+logger = logging.getLogger(__name__)
 
 
 def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
-    """
-    Run XLM-RoBERTa classification; returns verdict, confidence, summary, indicators, tokens.
-    """
-
+    """run xlm-roberta classification; returns verdict, confidence, summary, indicators, tokens."""
     combined = build_model_input(text, title=title, url=url)
 
     if not combined.strip():
-        return AnalyzeResponse(
-            verdict="REAL",
-            confidence=0.5,
-            summary="No text provided for analysis.",
-            indicators=[],
-            tokens=[],
+        return empty_input_response()
+
+    model_source = get_xlmr_model_source()
+    temperature = get_inference_temperature(model_source, backend="xlmr")
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "xlmr model_source=%r inference_temperature=%s",
+            model_source,
+            temperature,
         )
-
-    # Load model bundle (XLM-R)
-    bundle = load_bundle()
-    tokenizer = bundle.tokenizer
-    model = bundle.model
-    device = bundle.device
-
-    # Encode input
-    encoded = tokenizer(
+    bundle = load_model()
+    verdict, confidence = run_sequence_classification(
+        bundle.tokenizer,
+        bundle.model,
+        bundle.device,
         combined,
-        truncation=True,
-        max_length=512,
-        padding=True,
-        return_tensors="pt",
+        temperature=temperature,
     )
-    encoded = {k: v.to(device) for k, v in encoded.items()}
-
-    # Forward pass
-    with torch.no_grad():
-        outputs = model(**encoded)
-        logits = outputs.logits[0]
-
-    # Temperature scaling (important for your overconfidence issue)
-    temperature = 10.0
-    scaled_logits = logits / temperature
-    probs = torch.softmax(scaled_logits, dim=-1)
-
-    pred_idx = int(torch.argmax(probs).item())
-    verdict = _label_to_verdict(model, pred_idx)
-    confidence = float(probs[pred_idx].item())
-
-    # Clamp confidence (avoid unrealistic 0 / 1)
-    confidence = max(0.01, min(0.99, confidence))
-
-    indicators = [
-        "Source Credibility",
-        "Claim Verification",
-        "Language Tone",
-        "XLM-RoBERTa Prediction",
-        "Consistency with Known Facts",
-    ]
-
-    summary = (
-        f"Prediction based on XLM-RoBERTa "
-        f"({getattr(model.config, 'model_type', 'transformer')})."
-    )
-
-    return AnalyzeResponse(
+    return build_transformer_analyze_response(
         verdict=verdict,
-        confidence=float(round(confidence, 4)),
-        summary=summary,
-        indicators=indicators,
-        tokens=[],
+        confidence=confidence,
+        model=bundle.model,
+        backend_label="XLM-RoBERTa",
     )

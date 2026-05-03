@@ -16,7 +16,6 @@ from fastapi.responses import JSONResponse
 from core.config import UnknownAnalyzerBackendError
 from inference.factory import analyze_text
 
-# Import BOTH loaders
 from inference.roberta.loader import RoBERTaArtifactError, RoBERTaDependencyError
 from inference.xlmr.loader import XLMRArtifactError, XLMRDependencyError
 
@@ -56,7 +55,6 @@ def roberta_dependencies_missing(_request: Request, exc: RoBERTaDependencyError)
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
-# 🔥 XLM-R (NEW)
 @app.exception_handler(XLMRArtifactError)
 def xlmr_artifacts_unavailable(_request: Request, exc: XLMRArtifactError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})

@@ -1,35 +1,39 @@
 """
-Load tokenizer and sequence-classification head from artifacts/xlmr.
+load tokenizer and sequence-classification head from env-configured source.
 
-Expected layout (Hugging Face save_pretrained):
+model source: ``FAKE_SHA_XLMR_MODEL`` (huggingface hub id or local path);
+default: ``backend/artifacts/xlmr`` (resolved under the backend package).
 
-- config.json, tokenizer files, and model.safetensors or pytorch_model.bin.
-
-XLMRBundle keeps tokenizer, model, and compute device together so explainability code
-(e.g. SHAP) can reuse the same objects used at inference time.
+xlmr bundle keeps tokenizer, model, and device together for explainability (e.g. shap).
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from core.config import get_xlmr_model_source
+
+logger = logging.getLogger(__name__)
+
 
 class XLMRArtifactError(RuntimeError):
-    """Raised when the artifact directory is missing files needed for inference."""
+    """raised when the model cannot be loaded for inference."""
 
 
 class XLMRDependencyError(RuntimeError):
-    """Raised when torch/transformers are not installed."""
+    """raised when torch/transformers are not installed."""
 
 
-def _require_artifacts(model_dir: Path) -> None:
+def _require_local_artifacts(model_dir: Path) -> None:
+    """validate a local save_pretrained directory before load."""
     if not model_dir.is_dir():
         raise XLMRArtifactError(
             f"XLM-R artifacts directory not found: {model_dir}. "
-            "Place a Hugging Face save_pretrained output under backend/artifacts/xlmr/."
+            "Set FAKE_SHA_XLMR_MODEL to a hub id or a path with config.json and weights."
         )
 
     if not (model_dir / "config.json").is_file():
@@ -50,21 +54,28 @@ def _require_artifacts(model_dir: Path) -> None:
 
 @dataclass
 class XLMRBundle:
-    """Holds tokenizer + model + compute device."""
+    """holds tokenizer + model + compute device."""
 
     tokenizer: Any
     model: Any
     device: Any
 
 
-@lru_cache(maxsize=1)
-def load_bundle() -> XLMRBundle:
-    """
-    Load and cache tokenizer + model once per process.
+def _is_resolved_local_dir(model_source: str) -> bool:
+    p = Path(model_source).expanduser()
+    return p.is_dir()
 
-    Raises:
-        XLMRArtifactError: Missing or incomplete artifact tree.
-        XLMRDependencyError: torch / transformers not installed.
+
+@lru_cache(maxsize=1)
+def load_model() -> XLMRBundle:
+    """
+    load and cache tokenizer + model once per process.
+
+    model location comes from ``FAKE_SHA_XLMR_MODEL`` (see :mod:`core.config`).
+
+    raises:
+        xlmr artifact error: missing local files or load failure.
+        xlmr dependency error: torch / transformers not installed.
     """
     try:
         import torch
@@ -75,16 +86,25 @@ def load_bundle() -> XLMRBundle:
             "Install with: pip install torch transformers safetensors"
         ) from e
 
-    # 🔥 IMPORTANT: new artifact path
-    model_dir = Path(__file__).resolve().parent.parent.parent / "artifacts" / "xlmr"
+    model_source = get_xlmr_model_source()
 
-    _require_artifacts(model_dir)
+    if _is_resolved_local_dir(model_source):
+        _require_local_artifacts(Path(model_source).expanduser().resolve())
+        origin = "local directory"
+    else:
+        origin = "huggingface hub or remote path"
+
+    logger.info("loading xlm-r model from %r (%s)", model_source, origin)
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_source)
+        model = AutoModelForSequenceClassification.from_pretrained(model_source)
+    except Exception as e:
+        raise XLMRArtifactError(
+            f"Failed to load XLM-R model from {model_source!r}: {e}"
+        ) from e
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
-    model = AutoModelForSequenceClassification.from_pretrained(str(model_dir))
-
     model.eval()
     model.to(device)
 
