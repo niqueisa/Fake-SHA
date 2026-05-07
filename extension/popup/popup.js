@@ -416,11 +416,13 @@ document.addEventListener("DOMContentLoaded", () => {
         text: typeof t?.text === "string" ? t.text : "",
         impact,
         shap: direction === "opposes_predicted_class" ? -score : score,
+        indicator: typeof t?.indicator === "string" ? t.indicator : "",
       };
     }).filter((t) => t.text.trim().length > 0);
     const totalTopAbs = rawTopTokens.reduce((acc, t) => acc + Math.abs(Number(t.shap) || 0), 0);
     const topTokens = rawTopTokens.map((t) => ({
       ...t,
+      indicator: typeof t?.indicator === "string" ? t.indicator : "",
       // Token percentage is contribution share among displayed top tokens.
       contributionPct: totalTopAbs > 0 ? (Math.abs(Number(t.shap) || 0) / totalTopAbs) * 100 : 0,
     }));
@@ -686,7 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const indicatorRows = data.indicators
-      .map((ind) => {
+      .map((ind, idx) => {
         // Use the same normalized value for displayed percentage and progress width.
         const contributionPct = clamp(Number(ind.contributionPct ?? 0), 0, 100);
         const width = contributionPct;
@@ -707,13 +709,19 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="text-sm text-gray-400">${escapeHtml(ind.name)}</div>
               <div class="flex items-center gap-2">
                 <div class="text-sm font-semibold text-[#1e2c3e]">${contributionStr}</div>
-                <div class="h-5 w-5 rounded-full flex items-center justify-center" style="background:${theme.indicatorBg};">
+                <button
+                  type="button"
+                  class="indicator-token-filter h-5 w-5 rounded-full flex items-center justify-center"
+                  data-indicator-idx="${idx}"
+                  title="Filter top tokens by this indicator"
+                  style="background:${theme.indicatorBg};"
+                >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M6 20V10" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
                     <path d="M12 20V6" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
                     <path d="M18 20V14" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
                   </svg>
-                </div>
+                </button>
               </div>
             </div>
             ${indicatorSummary}
@@ -728,8 +736,8 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>
     `;
 
-    const tokenRows = data.topTokens
-      .map((t, i) => {
+    function buildTokenRows(tokens, expanded = false) {
+      return (tokens || []).map((t, i) => {
         const dotLow = impactColor("low");
         const dotMed = impactColor("medium");
         const dotHigh = impactColor("high");
@@ -745,7 +753,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const [c1, c2, c3] = activeColors[active] || activeColors.low;
 
         return `
-          <div class="token-row ${i >= 5 ? "extra-token hidden" : ""} flex items-center justify-between py-2 border-t border-gray-100">
+          <div class="token-row ${!expanded && i >= 5 ? "extra-token hidden" : ""} flex items-center justify-between py-2 border-t border-gray-100">
             <div class="flex items-center gap-3 min-w-0">
               <div class="flex items-center gap-2 flex-shrink-0">
                 <span class="h-3.5 w-3.5 rounded-full border" style="background:${c1}; border-color:#d1d5db;"></span>
@@ -760,21 +768,8 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           </div>
         `;
-      })
-      .join(" ");
-    const hasTokenOverflow = Array.isArray(data.topTokens) && data.topTokens.length > 5;
-    const tokenToggle = hasTokenOverflow
-      ? `
-        <button
-          id="btnToggleTokens"
-          type="button"
-          data-expanded="false"
-          class="mt-2 text-xs font-semibold text-[#1e2c3e] hover:underline"
-        >
-          Show more tokens
-        </button>
-      `
-      : "";
+      }).join(" ");
+    }
 
     resultState.innerHTML = `
       <section>
@@ -816,9 +811,17 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
 
           <div class="mt-3 border-b border-gray-200">
-            ${tokenRows}
+            <div id="tokenRowsContainer">${buildTokenRows(data.topTokens, false)}</div>
           </div>
-          ${tokenToggle}
+          <button
+            id="btnToggleTokens"
+            type="button"
+            data-expanded="false"
+            class="${Array.isArray(data.topTokens) && data.topTokens.length > 5 ? "" : "hidden"} mt-2 text-xs font-semibold text-[#1e2c3e] hover:underline"
+          >
+            Show more tokens
+          </button>
+          <div id="tokenFilterHint" class="mt-1 text-xs text-gray-500 hidden"></div>
         </div>
 
         <!-- Summary -->
@@ -884,17 +887,60 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Top tokens UX: collapse to 5 rows; allow expand/minimize when overflow exists.
+    // Top tokens UX: supports indicator filtering + expand/minimize.
     const btnToggleTokens = document.getElementById("btnToggleTokens");
+    const tokenRowsContainer = document.getElementById("tokenRowsContainer");
+    const tokenFilterHint = document.getElementById("tokenFilterHint");
+    let expanded = false;
+    let activeIndicatorIdx = null;
+
+    function getFilteredTokens() {
+      if (activeIndicatorIdx == null) return data.topTokens || [];
+      const selectedIndicator = data.indicators?.[activeIndicatorIdx];
+      const tokenSet = new Set((selectedIndicator?.tokens || []).map((s) => String(s).toLowerCase()));
+      if (tokenSet.size === 0) return [];
+      return (data.topTokens || []).filter((t) => tokenSet.has(String(t.text || "").toLowerCase()));
+    }
+
+    function renderTokenSection() {
+      if (!tokenRowsContainer || !btnToggleTokens) return;
+      const filtered = getFilteredTokens();
+      tokenRowsContainer.innerHTML = buildTokenRows(filtered, expanded);
+      const hasOverflow = filtered.length > 5;
+      btnToggleTokens.classList.toggle("hidden", !hasOverflow);
+      btnToggleTokens.textContent = expanded ? "Show fewer tokens" : "Show more tokens";
+      btnToggleTokens.dataset.expanded = expanded ? "true" : "false";
+      if (!hasOverflow) expanded = false;
+
+      if (tokenFilterHint) {
+        if (activeIndicatorIdx == null) {
+          tokenFilterHint.classList.add("hidden");
+          tokenFilterHint.textContent = "";
+        } else {
+          tokenFilterHint.classList.remove("hidden");
+          tokenFilterHint.textContent = `Filtered by: ${data.indicators?.[activeIndicatorIdx]?.name || "Indicator"}`;
+        }
+      }
+    }
+
     if (btnToggleTokens) {
       btnToggleTokens.addEventListener("click", () => {
-        const currentlyExpanded = btnToggleTokens.dataset.expanded === "true";
-        const rows = resultState.querySelectorAll(".extra-token");
-        rows.forEach((row) => row.classList.toggle("hidden", currentlyExpanded));
-        btnToggleTokens.dataset.expanded = currentlyExpanded ? "false" : "true";
-        btnToggleTokens.textContent = currentlyExpanded ? "Show more tokens" : "Show fewer tokens";
+        expanded = !expanded;
+        renderTokenSection();
       });
     }
+
+    resultState.querySelectorAll(".indicator-token-filter").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-indicator-idx"));
+        if (!Number.isFinite(idx)) return;
+        activeIndicatorIdx = activeIndicatorIdx === idx ? null : idx;
+        expanded = false;
+        renderTokenSection();
+      });
+    });
+
+    renderTokenSection();
   }
 
   function saveHistoryIfEnabled(resultData) {
