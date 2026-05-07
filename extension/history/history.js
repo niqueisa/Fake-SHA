@@ -93,7 +93,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function normalizeRecord(item) {
-    if (item.articleTitle != null && Array.isArray(item.indicators) && item.indicators.length > 0 && typeof item.indicators[0] === "object") {
+    // Treat popup-saved records as canonical even when indicators are empty.
+    if (item.articleTitle != null && Array.isArray(item.indicators) && (item.label || item.summary || item.topTokens)) {
       return {
         articleTitle: item.articleTitle || item.title || "Untitled",
         sourceUrl: item.sourceUrl || "",
@@ -110,7 +111,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const indNames = Array.isArray(item.indicators) ? item.indicators : [];
     const indicators = indNames.map((name, i) => ({
       name: typeof name === "string" ? name : "Indicator",
-      shap: item.isFake ? -15 : 20,
       contributionPct: Math.max(5, 80 - i * 15),
     }));
     return {
@@ -129,6 +129,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderResultDetail(data) {
     const theme = getThemeForData(data);
 
+    function impactFromContributionPct(value) {
+      const pct = clamp(Number(value ?? 0), 0, 100);
+      if (pct >= 66.67) return "high";
+      if (pct >= 33.34) return "medium";
+      return "low";
+    }
+
     const impactColor = (impact) => {
       if (impact === "high") return theme.tokenHigh;
       if (impact === "medium") return theme.tokenMed;
@@ -137,8 +144,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const indicatorRows = (data.indicators || [])
       .map((ind) => {
-        const width = clamp(ind.contributionPct ?? 0, 0, 100);
-        const shapStr = `${formatSigned(ind.shap)}%`;
+        const width = clamp(Number(ind.contributionPct ?? 0), 0, 100);
+        const contributionStr = `${width.toFixed(1)}%`;
         return `
           <div class="mt-4">
             <div class="h-3 w-full rounded-full" style="background:${theme.indicatorBg};">
@@ -147,7 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="mt-2 flex items-center justify-between">
               <div class="text-sm text-gray-400">${escapeHtml(ind.name)}</div>
               <div class="flex items-center gap-2">
-                <div class="text-sm font-semibold text-[#1e2c3e]">${shapStr}</div>
+                <div class="text-sm font-semibold text-[#1e2c3e]">${contributionStr}</div>
                 <div class="h-5 w-5 rounded-full flex items-center justify-center" style="background:${theme.indicatorBg};">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M6 20V10" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
@@ -168,7 +175,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const dotLow = impactColor("low");
         const dotMed = impactColor("medium");
         const dotHigh = impactColor("high");
-        const active = t.impact || "low";
+        // Dot severity is based on token contribution percentage.
+        const active = impactFromContributionPct(t.contributionPct);
         const activeColors = {
           low: [dotLow, "#ffffff", "#ffffff"],
           medium: ["#ffffff", dotMed, "#ffffff"],
@@ -186,7 +194,7 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="text-sm tracking-wide text-gray-900 truncate">${escapeHtml(t.text)}</div>
             </div>
             <div class="ml-3 flex-shrink-0 text-xs font-semibold text-gray-700 px-2 py-1 rounded-md" style="background:#e5e7eb;">
-              (${formatSigned(t.shap)}%)
+              (${Number(t.contributionPct || 0).toFixed(1)}%)
             </div>
           </div>
         `;
@@ -232,7 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="mt-6">
           <div class="flex items-end justify-between">
             <div class="text-base font-bold text-[#1e2c3e]">Key Indicators</div>
-            <div class="text-sm text-gray-500">SHAP Value</div>
+            <div class="text-sm text-gray-500">Contribution</div>
           </div>
           ${indicatorRows}
         </div>

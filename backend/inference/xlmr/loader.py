@@ -16,6 +16,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from core.config import ARTIFACTS_XLMR_DIR
+
 
 class XLMRArtifactError(RuntimeError):
     """Raised when the artifact directory is missing files needed for inference."""
@@ -75,8 +77,8 @@ def load_bundle() -> XLMRBundle:
             "Install with: pip install torch transformers safetensors"
         ) from e
 
-    # 🔥 IMPORTANT: new artifact path
-    model_dir = Path(__file__).resolve().parent.parent.parent / "artifacts" / "xlmr"
+    # Keep model location config-driven so future model replacement is path-only.
+    model_dir = ARTIFACTS_XLMR_DIR
 
     _require_artifacts(model_dir)
 

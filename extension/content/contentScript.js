@@ -8,6 +8,10 @@ function getCurrentSelectionText() {
     const selection = window.getSelection ? window.getSelection() : null;
     if (selection && selection.rangeCount > 0) {
       text = selection.toString();
+      if (text && text.trim()) {
+        // Keep a clone of analyzed selection so highlighting stays scoped.
+        lastSelectionRange = selection.getRangeAt(0).cloneRange();
+      }
     }
   } catch (e) {
     // ignore selection errors
@@ -88,6 +92,7 @@ function getPageContent() {
 const HIGHLIGHT_CLASS = "fake-sha-highlight";
 const MAX_TOKENS_TO_HIGHLIGHT = 10;
 const MIN_TOKEN_LENGTH = 2;
+let lastSelectionRange = null;
 
 /**
  * Inject CSS for highlight styling. Idempotent.
@@ -116,6 +121,40 @@ function shouldSkipNode(node) {
   if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT") return true;
   if (parent.closest && parent.closest("." + HIGHLIGHT_CLASS)) return true;
   return false;
+}
+
+function normalizeText(s) {
+  return String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Pick a highlight scope root so matches stay within analyzed text context.
+ */
+function getScopeRoot(scopeText) {
+  // 1) Prefer exact selection scope captured from fakeSha_getSelection.
+  try {
+    if (lastSelectionRange && lastSelectionRange.commonAncestorContainer) {
+      const anc = lastSelectionRange.commonAncestorContainer;
+      const el = anc.nodeType === Node.ELEMENT_NODE ? anc : anc.parentElement;
+      if (el && document.documentElement.contains(el)) {
+        return el;
+      }
+    }
+  } catch (e) {
+    // ignore and use fallback
+  }
+
+  // 2) Fallback: locate a broad container containing the analyzed text snippet.
+  const needle = normalizeText(scopeText).slice(0, 160);
+  if (!needle) return document.body;
+  const candidates = [document.querySelector("article"), document.querySelector("main"), document.body]
+    .filter(Boolean);
+  for (const el of candidates) {
+    if (normalizeText(el.innerText || "").includes(needle)) {
+      return el;
+    }
+  }
+  return document.body;
 }
 
 /**
@@ -147,16 +186,17 @@ function highlightOneMatch(textNode, token) {
 /**
  * Highlight all occurrences of a token in the document.
  */
-function highlightToken(token) {
+function highlightToken(token, root) {
   if (!token || typeof token !== "string") return;
   const t = token.trim();
   if (t.length < MIN_TOKEN_LENGTH) return;
+  const scopeRoot = root || document.body;
 
   let found;
   do {
     found = false;
     const walker = document.createTreeWalker(
-      document.body,
+      scopeRoot,
       NodeFilter.SHOW_TEXT,
       {
         acceptNode(node) {
@@ -190,11 +230,12 @@ function clearHighlights() {
  * Apply highlights for the given token texts.
  * Clears previous highlights first, then highlights up to MAX_TOKENS_TO_HIGHLIGHT.
  */
-function applyTokenHighlights(tokens) {
+function applyTokenHighlights(tokens, scopeText) {
   clearHighlights();
   if (!Array.isArray(tokens) || tokens.length === 0) return;
 
   injectHighlightStyles();
+  const scopeRoot = getScopeRoot(scopeText);
 
   const tokenTexts = [];
   for (const t of tokens) {
@@ -206,7 +247,7 @@ function applyTokenHighlights(tokens) {
   }
 
   for (const token of tokenTexts) {
-    highlightToken(token);
+    highlightToken(token, scopeRoot);
   }
 }
 
@@ -266,7 +307,7 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage)
       }
     } else if (request.type === "fakeSha_highlightTokens") {
       try {
-        applyTokenHighlights(request.tokens || []);
+        applyTokenHighlights(request.tokens || [], request.scopeText || "");
         sendResponse({ ok: true });
       } catch (e) {
         sendResponse({ ok: false, error: String(e) });

@@ -6,6 +6,8 @@ Confidence is computed using temperature scaling over logits for realistic proba
 
 from __future__ import annotations
 
+from core.config import shap_enabled
+from explainability.xlmr_shap import build_shap_explanation, explanation_unavailable
 from .loader import load_bundle
 from .preprocess import build_model_input
 from schemas.models import AnalyzeResponse
@@ -48,49 +50,34 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
 
     # Load model bundle (XLM-R)
     bundle = load_bundle()
-    tokenizer = bundle.tokenizer
     model = bundle.model
-    device = bundle.device
 
-    # Encode input
-    encoded = tokenizer(
-        combined,
-        truncation=True,
-        max_length=512,
-        padding=True,
-        return_tensors="pt",
-    )
-    encoded = {k: v.to(device) for k, v in encoded.items()}
-
-    # Forward pass
-    with torch.no_grad():
-        outputs = model(**encoded)
-        logits = outputs.logits[0]
+    probs_batch = predict_proba_texts([combined], bundle=bundle)
+    probs_vec = probs_batch[0]
 
     # Temperature scaling (important for your overconfidence issue)
-    temperature = 10.0
-    scaled_logits = logits / temperature
-    probs = torch.softmax(scaled_logits, dim=-1)
-
-    pred_idx = int(torch.argmax(probs).item())
+    pred_idx = int(torch.argmax(probs_vec).item())
     verdict = _label_to_verdict(model, pred_idx)
-    confidence = float(probs[pred_idx].item())
+    confidence = float(probs_vec[pred_idx].item())
 
     # Clamp confidence (avoid unrealistic 0 / 1)
     confidence = max(0.01, min(0.99, confidence))
 
-    indicators = [
-        "Source Credibility",
-        "Claim Verification",
-        "Language Tone",
-        "XLM-RoBERTa Prediction",
-        "Consistency with Known Facts",
-    ]
+    # Legacy top-level `indicators` is kept for API compatibility only.
+    # Real explainability indicators are returned in `explanation.indicators`.
+    indicators = []
 
     summary = (
         f"Prediction based on XLM-RoBERTa "
         f"({getattr(model.config, 'model_type', 'transformer')})."
     )
+
+    explanation = None
+    if shap_enabled():
+        try:
+            explanation = build_shap_explanation(combined, predicted_class_index=pred_idx)
+        except Exception:
+            explanation = explanation_unavailable()
 
     return AnalyzeResponse(
         verdict=verdict,
@@ -98,4 +85,31 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
         summary=summary,
         indicators=indicators,
         tokens=[],
+        explanation=explanation,
     )
+
+
+def predict_proba_texts(texts: list[str], bundle=None):
+    """Predict class probabilities (softmax) for a batch of text inputs."""
+    if bundle is None:
+        bundle = load_bundle()
+    tokenizer = bundle.tokenizer
+    model = bundle.model
+    device = bundle.device
+
+    encoded = tokenizer(
+        texts,
+        truncation=True,
+        max_length=512,
+        padding=True,
+        return_tensors="pt",
+    )
+    encoded = {k: v.to(device) for k, v in encoded.items()}
+    with torch.no_grad():
+        outputs = model(**encoded)
+        logits = outputs.logits
+
+    temperature = 10.0
+    scaled_logits = logits / temperature
+    probs = torch.softmax(scaled_logits, dim=-1)
+    return probs
