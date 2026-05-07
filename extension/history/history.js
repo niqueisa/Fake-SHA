@@ -143,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const indicatorRows = (data.indicators || [])
-      .map((ind) => {
+      .map((ind, idx) => {
         const width = clamp(Number(ind.contributionPct ?? 0), 0, 100);
         const contributionStr = `${width.toFixed(1)}%`;
         return `
@@ -155,13 +155,19 @@ document.addEventListener("DOMContentLoaded", () => {
               <div class="text-sm text-gray-400">${escapeHtml(ind.name)}</div>
               <div class="flex items-center gap-2">
                 <div class="text-sm font-semibold text-[#1e2c3e]">${contributionStr}</div>
-                <div class="h-5 w-5 rounded-full flex items-center justify-center" style="background:${theme.indicatorBg};">
+                <button
+                  type="button"
+                  class="detail-indicator-token-filter h-5 w-5 rounded-full flex items-center justify-center"
+                  data-indicator-idx="${idx}"
+                  title="Filter top tokens by this indicator"
+                  style="background:${theme.indicatorBg};"
+                >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M6 20V10" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
                     <path d="M12 20V6" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
                     <path d="M18 20V14" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
                   </svg>
-                </div>
+                </button>
               </div>
             </div>
           </div>
@@ -171,7 +177,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const tokens = data.topTokens || [];
     const tokenRows = tokens
-      .map((t) => {
+      .map((t, i) => {
         const dotLow = impactColor("low");
         const dotMed = impactColor("medium");
         const dotHigh = impactColor("high");
@@ -184,7 +190,10 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         const [c1, c2, c3] = activeColors[active] || activeColors.low;
         return `
-          <div class="flex items-center justify-between py-2 border-t border-gray-100">
+          <div
+            class="detail-token-row ${i >= 5 ? "hidden" : ""} flex items-center justify-between py-2 border-t border-gray-100"
+            data-token="${encodeURIComponent(String(t.text || "").toLowerCase())}"
+          >
             <div class="flex items-center gap-3 min-w-0">
               <div class="flex items-center gap-2 flex-shrink-0">
                 <span class="h-3.5 w-3.5 rounded-full border" style="background:${c1}; border-color:#d1d5db;"></span>
@@ -215,9 +224,18 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
             <div class="text-sm text-gray-400">${escapeHtml(data.topTokensLegend)}</div>
           </div>
-          <div class="mt-3 border-b border-gray-200">
+          <div id="detailTokenRowsContainer" class="mt-3 border-b border-gray-200">
             ${tokenRows}
           </div>
+          <button
+            id="btnToggleDetailTokens"
+            type="button"
+            data-expanded="false"
+            class="${tokens.length > 5 ? "" : "hidden"} mt-2 text-xs font-semibold text-[#1e2c3e] hover:underline"
+          >
+            Show more tokens
+          </button>
+          <div id="detailTokenFilterHint" class="mt-1 text-xs text-gray-500 hidden"></div>
         </div>
       `
       : "";
@@ -279,7 +297,69 @@ document.addEventListener("DOMContentLoaded", () => {
   function showDetails(item) {
     const data = normalizeRecord(item);
     if (detailContent) detailContent.innerHTML = renderResultDetail(data);
+    setupDetailTokenInteractions(data);
     showDetailView();
+  }
+
+  function setupDetailTokenInteractions(data) {
+    if (!detailContent) return;
+    const btnToggle = detailContent.querySelector("#btnToggleDetailTokens");
+    const filterHint = detailContent.querySelector("#detailTokenFilterHint");
+    let expanded = false;
+    let activeIndicatorIdx = null;
+
+    function applyTokenVisibility() {
+      const rows = Array.from(detailContent.querySelectorAll(".detail-token-row"));
+      const selectedIndicator = activeIndicatorIdx == null ? null : data.indicators?.[activeIndicatorIdx];
+      const tokenSet = new Set((selectedIndicator?.tokens || []).map((s) => encodeURIComponent(String(s).toLowerCase())));
+
+      let visibleCounter = 0;
+      rows.forEach((row) => {
+        const token = row.getAttribute("data-token") || "";
+        const passFilter = !selectedIndicator || tokenSet.has(token);
+        row.classList.toggle("hidden", !passFilter);
+        if (passFilter) {
+          visibleCounter += 1;
+          const hideForOverflow = !expanded && visibleCounter > 5;
+          row.classList.toggle("hidden", hideForOverflow);
+        }
+      });
+
+      if (btnToggle) {
+        btnToggle.classList.toggle("hidden", visibleCounter <= 5);
+        btnToggle.textContent = expanded ? "Show fewer tokens" : "Show more tokens";
+        btnToggle.dataset.expanded = expanded ? "true" : "false";
+      }
+
+      if (filterHint) {
+        if (!selectedIndicator) {
+          filterHint.classList.add("hidden");
+          filterHint.textContent = "";
+        } else {
+          filterHint.classList.remove("hidden");
+          filterHint.textContent = `Filtered by: ${selectedIndicator.name || "Indicator"}`;
+        }
+      }
+    }
+
+    if (btnToggle) {
+      btnToggle.addEventListener("click", () => {
+        expanded = !expanded;
+        applyTokenVisibility();
+      });
+    }
+
+    detailContent.querySelectorAll(".detail-indicator-token-filter").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-indicator-idx"));
+        if (!Number.isFinite(idx)) return;
+        activeIndicatorIdx = activeIndicatorIdx === idx ? null : idx;
+        expanded = false;
+        applyTokenVisibility();
+      });
+    });
+
+    applyTokenVisibility();
   }
 
   /**
