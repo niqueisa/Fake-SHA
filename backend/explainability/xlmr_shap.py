@@ -16,7 +16,7 @@ from typing import Any
 
 import numpy as np
 
-from core.config import shap_max_words, shap_top_k
+from core.config import shap_max_evals, shap_max_words, shap_top_k
 from inference.xlmr.loader import XLMRBundle
 from schemas.models import ExplanationIndicator, ExplanationResult, ExplanationTopToken
 
@@ -28,28 +28,101 @@ _EXPLANATION_NOTE = (
     "It does not verify factual correctness."
 )
 
+# IMPORTANT: This dictionary is used only to group SHAP token contributions into
+# interpretable UI indicators. It does NOT influence model prediction and does NOT
+# perform factual verification/fact-checking.
 _INDICATOR_KEYWORDS: dict[str, list[str]] = {
     "Linguistic Tone": [
-        "emotional", "alarming", "urgent", "angry", "shocking", "controversial",
-        "criticized", "praised", "fear", "threat", "warned",
+        "angry", "anger", "fear", "fearful", "worried", "worry", "sad", "sadness",
+        "happy", "emotional", "emotive", "alarming", "alarm", "threat", "threatening",
+        "danger", "dangerous", "panic", "panicked", "controversial", "criticized",
+        "criticize", "condemned", "condemn", "praised", "praise", "mocked", "mock",
+        "insulted", "insult", "accused", "accuse", "blamed", "blame", "outrage",
+        "outraged", "furious", "shame", "shameful", "disappointed", "disappointing",
+        "concern", "concerned", "warning", "warned", "warn",
+        "galit", "nagagalit", "kinagalit", "takot", "natakot", "nakakatakot",
+        "pangamba", "nangangamba", "kabado", "nakakabahala", "banta", "nagbabanta",
+        "delikado", "panganib", "mapanganib", "gulat", "nagulat", "nakakagulat",
+        "malungkot", "lungkot", "masaya", "emosyonal", "umiyak", "iyak",
+        "kinondena", "kondena", "pinuna", "batikos", "binatikos", "puna",
+        "pinuri", "papuri", "inis", "naiinis", "napahiya", "kahihiyan",
+        "sinisi", "sisi", "nakakainis", "nakakabigla", "babala", "nagbabala",
     ],
     "Claim Certainty": [
-        "confirmed", "proven", "definitely", "always", "never", "guaranteed",
-        "sure", "allegedly", "reportedly", "claimed", "supposed",
+        "confirmed", "confirm", "proven", "proved", "proof", "definitely",
+        "certainly", "surely", "guaranteed", "guarantee", "undeniable",
+        "undoubtedly", "always", "never", "must", "will", "cannot", "clearly",
+        "obviously", "true", "false", "fake", "real", "claim", "claimed",
+        "claims", "alleged", "allegedly", "reportedly", "supposedly",
+        "rumored", "rumour", "rumor", "possible", "possibly", "may", "might",
+        "could", "likely", "unlikely", "said to be", "believed", "according",
+        "kumpirmado", "kinumpirma", "patunay", "napatunayan", "pinatunayan",
+        "sigurado", "tiyak", "tiyak na", "talaga", "totoo", "hindi totoo",
+        "peke", "huwad", "di umano", "umano", "diumano", "sinasabing",
+        "sabi", "sinabi", "ayon", "ayon sa", "pinaniniwalaan", "maaaring",
+        "posible", "malamang", "hindi maaari", "dapat", "hindi dapat",
+        "walang duda", "klaro", "malinaw", "inaangkin", "pahayag",
+        "balitang", "usap usapan", "kumakalat",
     ],
     "Presence of Evidence-related Language": [
-        "evidence", "proof", "report", "study", "data", "investigation",
-        "according", "records", "documents", "findings", "statement",
+        "evidence", "proof", "data", "record", "records", "document",
+        "documents", "report", "reports", "study", "studies", "research",
+        "investigation", "investigated", "findings", "analysis", "survey",
+        "statistics", "statistical", "source", "sources", "statement",
+        "official statement", "press release", "certificate", "court record",
+        "medical record", "police report", "audit", "verified", "verification",
+        "fact check", "factcheck", "fact checked", "based on", "according to",
+        "ebidensya", "patunay", "datos", "rekord", "tala", "dokumento",
+        "ulat", "pag aaral", "saliksik", "imbestigasyon", "sinisiyasat",
+        "natuklasan", "resulta", "pagsusuri", "sarvey", "estadistika",
+        "pinagmulan", "sanggunian", "pahayag", "opisyal na pahayag",
+        "sertipiko", "rekord ng korte", "ulat ng pulis",
+        "beripikado", "beripikasyon", "batay sa",
+        "ayon sa ulat", "base sa", "basehan", "katibayan",
     ],
     "Textual Source Attribution Mentions": [
-        "said", "according to", "spokesperson", "official", "agency", "department",
-        "government", "police", "authority", "expert", "researchers",
+        "said", "says", "stated", "announced", "according", "according to",
+        "reported by", "spokesperson", "official", "officials", "agency",
+        "department", "government", "president", "senator", "mayor",
+        "governor", "police", "authority", "authorities", "expert", "experts",
+        "researcher", "researchers", "scientist", "scientists", "journalist",
+        "news agency", "court", "supreme court", "congress", "senate",
+        "house", "doh", "deped", "dilg", "comelec", "pnp", "nbi", "doj",
+        "pna", "philippine news agency", "vera files", "rappler", "gma",
+        "abs cbn", "cnn philippines", "inquirer", "philstar", "manila bulletin",
+        "sinabi", "ayon", "ayon kay", "ayon sa", "pahayag", "ipinahayag",
+        "iniulat", "ulat", "anunsyo", "inanunsyo", "tagapagsalita",
+        "opisyal", "ahensya", "kagawaran", "gobyerno", "pangulo",
+        "senador", "alkalde", "gobernador", "pulis", "awtoridad",
+        "eksperto", "mananaliksik", "mamamahayag", "hukuman", "korte",
+        "kongreso", "senado", "kamara", "barangay", "lgu", "lokal na pamahalaan",
     ],
     "Sensationalism": [
-        "viral", "shocking", "exposed", "unbelievable", "breaking", "must see",
-        "secret", "scandal", "leaked", "click", "watch", "share",
+        "viral", "shocking", "shock", "exposed", "expose", "unbelievable",
+        "breaking", "must see", "must watch", "secret", "scandal", "leaked",
+        "leak", "watch", "share", "click", "click here", "urgent", "alert",
+        "warning", "bombshell", "explosive", "truth revealed", "revealed",
+        "finally revealed", "hidden truth", "banned", "censored", "you wont believe",
+        "wow", "amazing", "miracle", "instant", "destroyed", "humiliated",
+        "caught", "caught on camera", "exclusive", "latest", "trending", "omg",
+        "kumalat", "kalat", "nakakagulat", "gulat", "ibinunyag",
+        "binunyag", "pasabog", "eskandalo", "sekreto", "lihim",
+        "kumalat na video", "panoorin", "i share",
+        "pindutin", "alerto", "grabe",
+        "di kapani paniwala", "hindi kapani paniwala", "malupit", "matindi",
+        "wasak", "pinahiya", "nahuli", "huli sa camera", "eksklusibo",
+        "pinakabago", "mainit na balita", "abangan",
+        "alam niyo ba", "hindi mo aakalain", "ikakagulat mo",
     ],
 }
+
+_INDICATOR_PRIORITY: list[str] = [
+    "Textual Source Attribution Mentions",
+    "Presence of Evidence-related Language",
+    "Sensationalism",
+    "Claim Certainty",
+    "Linguistic Tone",
+]
 
 _INDICATOR_SUMMARY: dict[str, str] = {
     "Linguistic Tone": (
@@ -95,6 +168,34 @@ def _normalize_token(raw: str) -> str:
     return token
 
 
+def _normalize_match_text(raw: str) -> str:
+    text = (raw or "").lower().strip()
+    if not text:
+        return ""
+    text = (
+        text.replace("’", "'")
+        .replace("`", "'")
+        .replace("“", '"')
+        .replace("”", '"')
+        .replace("-", " ")
+    )
+    text = re.sub(r"[\"'`]", "", text)
+    text = re.sub(r"[^\w\s]", " ", text)
+    text = text.replace("_", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+_NORMALIZED_KEYWORDS: dict[str, list[str]] = {
+    name: sorted(
+        {_normalize_match_text(k) for k in kws if _normalize_match_text(k)},
+        key=len,
+        reverse=True,
+    )
+    for name, kws in _INDICATOR_KEYWORDS.items()
+}
+
+
 def _is_useful_token(token: str) -> bool:
     if not token.strip():
         return False
@@ -104,10 +205,12 @@ def _is_useful_token(token: str) -> bool:
 
 
 def _match_indicator(token_text: str) -> str | None:
-    low = token_text.lower()
-    for indicator_name, keywords in _INDICATOR_KEYWORDS.items():
-        for kw in keywords:
-            if kw in low:
+    # Phrase-aware matching with deterministic priority for overlapping keywords.
+    low = _normalize_match_text(token_text)
+    padded = f" {low} "
+    for indicator_name in _INDICATOR_PRIORITY:
+        for kw in _NORMALIZED_KEYWORDS.get(indicator_name, []):
+            if low == kw or f" {kw} " in padded:
                 return indicator_name
     return None
 
@@ -173,7 +276,12 @@ def _extract_class_values(values: Any, predicted_class_index: int) -> np.ndarray
     return arr.reshape(-1)
 
 
-def build_shap_explanation(text: str, predicted_class_index: int) -> ExplanationResult:
+def build_shap_explanation(
+    text: str,
+    predicted_class_index: int,
+    *,
+    max_evals: int | None = None,
+) -> ExplanationResult:
     """
     Build SHAP explanation payload for one text sample.
 
@@ -185,7 +293,7 @@ def build_shap_explanation(text: str, predicted_class_index: int) -> Explanation
 
     explainer = _get_shap_explainer()
     # Keep evaluation budget bounded for API latency.
-    shap_values = explainer([clipped], max_evals=256)
+    shap_values = explainer([clipped], max_evals=max_evals or shap_max_evals())
 
     raw_tokens = list(np.asarray(shap_values.data[0]).tolist())
     raw_scores = _extract_class_values(shap_values.values, predicted_class_index)

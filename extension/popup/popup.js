@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let popupSettings = { ...DEFAULT_POPUP_SETTINGS };
 
   const HISTORY_KEY = "fakeShaHistory";
+  const POPUP_SESSION_KEY = "fakeShaPopupSession";
 
   function getStorage() {
     try {
@@ -40,6 +41,45 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const storage = getStorage();
+
+  function setPopupSession(sessionData) {
+    try {
+      if (storage) {
+        storage.set({ [POPUP_SESSION_KEY]: sessionData }, () => {});
+      } else {
+        localStorage.setItem(POPUP_SESSION_KEY, JSON.stringify(sessionData));
+      }
+    } catch (e) {
+      // ignore persistence errors
+    }
+  }
+
+  function getPopupSession(callback) {
+    try {
+      if (storage) {
+        storage.get(POPUP_SESSION_KEY, (result) => {
+          callback((result && result[POPUP_SESSION_KEY]) || null);
+        });
+        return;
+      }
+      const raw = localStorage.getItem(POPUP_SESSION_KEY);
+      callback(raw ? JSON.parse(raw) : null);
+    } catch (e) {
+      callback(null);
+    }
+  }
+
+  function clearPopupSession() {
+    try {
+      if (storage) {
+        storage.remove(POPUP_SESSION_KEY, () => {});
+      } else {
+        localStorage.removeItem(POPUP_SESSION_KEY);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
 
   function getExtensionStorage(callback) {
     try {
@@ -83,7 +123,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function loadPopupSettingsThenRefresh() {
     getExtensionStorage(() => {
-      refreshSelectionFromPage();
+      // Restore last popup view if available (e.g., keep result visible after popup closes/reopens).
+      getPopupSession((session) => {
+        if (session && session.view === "result" && session.resultData) {
+          renderResult(session.resultData);
+          showResult();
+          return;
+        }
+        refreshSelectionFromPage();
+      });
     });
   }
   // Default state
@@ -169,6 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderResult(mappedData);
       saveHistoryIfEnabled(mappedData);
       showResult();
+      setPopupSession({ view: "result", resultData: mappedData });
 
       // 8. If highlightTokens is enabled, highlight contributing phrases on the page
       if (settings.highlightTokens && tabInfo.tabId != null) {
@@ -179,7 +228,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const tokens = shapTopTokens.length > 0
           ? shapTopTokens
           : (Array.isArray(backendResult.tokens) ? backendResult.tokens : []);
-        sendHighlightTokensToPage(tabInfo.tabId, tokens);
+        sendHighlightTokensToPage(tabInfo.tabId, tokens, textToAnalyze);
       }
     } catch (err) {
       const message =
@@ -279,13 +328,13 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Send tokens to content script for page highlighting (when highlightTokens setting is on).
    */
-  function sendHighlightTokensToPage(tabId, tokens) {
+  function sendHighlightTokensToPage(tabId, tokens, scopeText = "") {
     if (tabId == null || typeof chrome === "undefined" || !chrome.tabs?.sendMessage) return;
     const tokenTexts = Array.isArray(tokens)
       ? tokens.map((t) => (typeof t === "string" ? t : t && t.text ? t.text : "")).filter(Boolean)
       : [];
     if (tokenTexts.length === 0) return;
-    chrome.tabs.sendMessage(tabId, { type: "fakeSha_highlightTokens", tokens: tokenTexts }, () => {
+    chrome.tabs.sendMessage(tabId, { type: "fakeSha_highlightTokens", tokens: tokenTexts, scopeText }, () => {
       if (chrome.runtime.lastError) {
         // Ignore: content script may not be loaded (e.g. chrome:// page)
       }
@@ -338,7 +387,9 @@ document.addEventListener("DOMContentLoaded", () => {
       ? explanation.indicators
       : [];
     const indicators = indicatorsRaw.map((ind) => {
-      const contributionRaw = Number(ind?.contribution_percent);
+      // Accept both `contribution_percent` (backend shape) and `contributionPct` (defensive fallback).
+      const contributionCandidate = ind?.contribution_percent ?? ind?.contributionPct ?? 0;
+      const contributionRaw = parseFloat(String(contributionCandidate).replace("%", ""));
       const contributionPct = Number.isFinite(contributionRaw)
         ? clamp(contributionRaw, 0, 100)
         : 0;
@@ -356,7 +407,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Parse SHAP top tokens; fallback to legacy tokens if SHAP payload is missing.
     const shapTokensRaw = Array.isArray(explanation?.top_tokens) ? explanation.top_tokens : [];
     const legacyTokensRaw = Array.isArray(backend.tokens) ? backend.tokens : [];
-    const topTokens = (shapTokensRaw.length > 0 ? shapTokensRaw : legacyTokensRaw).map((t) => {
+    const rawTopTokens = (shapTokensRaw.length > 0 ? shapTokensRaw : legacyTokensRaw).map((t) => {
       const scoreRaw = Number(t?.score);
       const score = Number.isFinite(scoreRaw) ? scoreRaw : 0;
       const direction = typeof t?.direction === "string" ? t.direction : "";
@@ -367,6 +418,12 @@ document.addEventListener("DOMContentLoaded", () => {
         shap: direction === "opposes_predicted_class" ? -score : score,
       };
     }).filter((t) => t.text.trim().length > 0);
+    const totalTopAbs = rawTopTokens.reduce((acc, t) => acc + Math.abs(Number(t.shap) || 0), 0);
+    const topTokens = rawTopTokens.map((t) => ({
+      ...t,
+      // Token percentage is contribution share among displayed top tokens.
+      contributionPct: totalTopAbs > 0 ? (Math.abs(Number(t.shap) || 0) / totalTopAbs) * 100 : 0,
+    }));
 
     const note = typeof explanation?.note === "string"
       ? explanation.note
@@ -438,6 +495,7 @@ document.addEventListener("DOMContentLoaded", () => {
   btnClear.addEventListener("click", () => {
     showEmpty();
     hideError();
+    clearPopupSession();
 
     if (selectedTextValue) {
       selectedTextValue.textContent = "Nothing selected yet.";
@@ -452,6 +510,7 @@ document.addEventListener("DOMContentLoaded", () => {
   btnCancelLoading.addEventListener("click", () => {
     showEmpty();
     hideError();
+    setPopupSession({ view: "empty" });
   });
 
   if (btnOpenHistory) {
@@ -477,6 +536,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectionHeader) {
       selectionHeader.textContent = "No text selected";
     }
+    setPopupSession({ view: "empty" });
   }
 
   function showLoading() {
@@ -612,6 +672,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderResult(data) {
     const theme = getThemeForData(data);
 
+    function impactFromContributionPct(value) {
+      const pct = clamp(Number(value ?? 0), 0, 100);
+      if (pct >= 66.67) return "high";
+      if (pct >= 33.34) return "medium";
+      return "low";
+    }
+
     const impactColor = (impact) => {
       if (impact === "high") return theme.tokenHigh;
       if (impact === "medium") return theme.tokenMed;
@@ -620,8 +687,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const indicatorRows = data.indicators
       .map((ind) => {
-        const width = clamp(ind.contributionPct ?? 0, 0, 100);
-        const contributionStr = `${Number(width).toFixed(1)}%`;
+        // Use the same normalized value for displayed percentage and progress width.
+        const contributionPct = clamp(Number(ind.contributionPct ?? 0), 0, 100);
+        const width = contributionPct;
+        const contributionStr = `${contributionPct.toFixed(1)}%`;
         const indicatorSummary = ind.summary
           ? `<div class="mt-1 text-xs text-gray-500 leading-relaxed">${escapeHtml(ind.summary)}</div>`
           : "";
@@ -660,13 +729,14 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
 
     const tokenRows = data.topTokens
-      .map((t) => {
+      .map((t, i) => {
         const dotLow = impactColor("low");
         const dotMed = impactColor("medium");
         const dotHigh = impactColor("high");
 
         // match your mockup style: one active dot (low OR medium OR high)
-        const active = t.impact || "low";
+        // Dot severity is based on token contribution percentage.
+        const active = impactFromContributionPct(t.contributionPct);
         const activeColors = {
           low: [dotLow, "#ffffff", "#ffffff"],
           medium: ["#ffffff", dotMed, "#ffffff"],
@@ -675,7 +745,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const [c1, c2, c3] = activeColors[active] || activeColors.low;
 
         return `
-          <div class="flex items-center justify-between py-2 border-t border-gray-100">
+          <div class="token-row ${i >= 5 ? "extra-token hidden" : ""} flex items-center justify-between py-2 border-t border-gray-100">
             <div class="flex items-center gap-3 min-w-0">
               <div class="flex items-center gap-2 flex-shrink-0">
                 <span class="h-3.5 w-3.5 rounded-full border" style="background:${c1}; border-color:#d1d5db;"></span>
@@ -686,12 +756,25 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
 
             <div class="ml-3 flex-shrink-0 text-xs font-semibold text-gray-700 px-2 py-1 rounded-md" style="background:#e5e7eb;">
-              (${formatSigned(t.shap)}%)
+              (${Number(t.contributionPct || 0).toFixed(1)}%)
             </div>
           </div>
         `;
       })
       .join(" ");
+    const hasTokenOverflow = Array.isArray(data.topTokens) && data.topTokens.length > 5;
+    const tokenToggle = hasTokenOverflow
+      ? `
+        <button
+          id="btnToggleTokens"
+          type="button"
+          data-expanded="false"
+          class="mt-2 text-xs font-semibold text-[#1e2c3e] hover:underline"
+        >
+          Show more tokens
+        </button>
+      `
+      : "";
 
     resultState.innerHTML = `
       <section>
@@ -735,6 +818,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="mt-3 border-b border-gray-200">
             ${tokenRows}
           </div>
+          ${tokenToggle}
         </div>
 
         <!-- Summary -->
@@ -775,7 +859,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Back
     const btnBack = document.getElementById("btnBack");
-    if (btnBack) btnBack.addEventListener("click", () => { hideError(); showEmpty(); });
+    if (btnBack) {
+      btnBack.addEventListener("click", () => {
+        // Prefer true page history navigation if available.
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+        // Fallback to popup main view.
+        hideError();
+        clearPopupSession();
+        showEmpty();
+        refreshSelectionFromPage();
+      });
+    }
 
     // Report issue (dummy)
     const btnReport = document.getElementById("btnReportIssue");
@@ -784,6 +881,18 @@ document.addEventListener("DOMContentLoaded", () => {
         btnReport.textContent = "REPORTED (DUMMY)";
         btnReport.disabled = true;
         btnReport.classList.add("opacity-80", "cursor-not-allowed");
+      });
+    }
+
+    // Top tokens UX: collapse to 5 rows; allow expand/minimize when overflow exists.
+    const btnToggleTokens = document.getElementById("btnToggleTokens");
+    if (btnToggleTokens) {
+      btnToggleTokens.addEventListener("click", () => {
+        const currentlyExpanded = btnToggleTokens.dataset.expanded === "true";
+        const rows = resultState.querySelectorAll(".extra-token");
+        rows.forEach((row) => row.classList.toggle("hidden", currentlyExpanded));
+        btnToggleTokens.dataset.expanded = currentlyExpanded ? "false" : "true";
+        btnToggleTokens.textContent = currentlyExpanded ? "Show more tokens" : "Show fewer tokens";
       });
     }
   }

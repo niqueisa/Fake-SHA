@@ -56,3 +56,15 @@ def shap_top_k() -> int:
         return max(1, min(100, int(raw)))
     except ValueError:
         return 20
+
+
+def shap_max_evals() -> int:
+    """
+    Max SHAP partition evaluations per request.
+    Lower values are faster but less granular.
+    """
+    raw = os.environ.get("SHAP_MAX_EVALS", "96").strip()
+    try:
+        return max(16, min(1024, int(raw)))
+    except ValueError:
+        return 96

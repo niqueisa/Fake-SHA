@@ -6,8 +6,6 @@ Confidence is computed using temperature scaling over logits for realistic proba
 
 from __future__ import annotations
 
-import time
-
 from core.config import shap_enabled
 from explainability.xlmr_shap import build_shap_explanation, explanation_unavailable
 from .loader import load_bundle
@@ -65,13 +63,9 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     # Clamp confidence (avoid unrealistic 0 / 1)
     confidence = max(0.01, min(0.99, confidence))
 
-    indicators = [
-        "Source Credibility",
-        "Claim Verification",
-        "Language Tone",
-        "XLM-RoBERTa Prediction",
-        "Consistency with Known Facts",
-    ]
+    # Legacy top-level `indicators` is kept for API compatibility only.
+    # Real explainability indicators are returned in `explanation.indicators`.
+    indicators = []
 
     summary = (
         f"Prediction based on XLM-RoBERTa "
@@ -81,13 +75,7 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     explanation = None
     if shap_enabled():
         try:
-            start = time.perf_counter()
             explanation = build_shap_explanation(combined, predicted_class_index=pred_idx)
-            # Soft latency guard: if SHAP becomes too slow, suppress payload.
-            if time.perf_counter() - start > 8.0:
-                explanation = explanation_unavailable(
-                    "SHAP explanation timed out for this request. Classification is still available."
-                )
         except Exception:
             explanation = explanation_unavailable()
 
