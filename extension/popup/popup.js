@@ -172,7 +172,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // 8. If highlightTokens is enabled, highlight contributing phrases on the page
       if (settings.highlightTokens && tabInfo.tabId != null) {
-        const tokens = Array.isArray(backendResult.tokens) ? backendResult.tokens : [];
+        // Prefer SHAP top tokens for highlighting; fallback to legacy backend.tokens.
+        const shapTopTokens = Array.isArray(backendResult?.explanation?.top_tokens)
+          ? backendResult.explanation.top_tokens
+          : [];
+        const tokens = shapTopTokens.length > 0
+          ? shapTopTokens
+          : (Array.isArray(backendResult.tokens) ? backendResult.tokens : []);
         sendHighlightTokensToPage(tabInfo.tabId, tokens);
       }
     } catch (err) {
@@ -303,8 +309,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /**
    * Map backend /analyze response to popup's render format.
-   * Backend returns: verdict, confidence (0-1), summary, indicators (string[]), tokens ({text, impact, label}[])
-   * Popup expects: label, confidence (0-100), indicators ({name, shap, contributionPct}[]), topTokens ({text, shap, impact}[]), etc.
+   * SHAP parsing rules:
+   * - Use explanation.indicators as the single source for indicator rows.
+   * - Use explanation.top_tokens as the source for token list/highlighting.
+   * - contribution_percent is a grouped SHAP contribution share, not confidence.
    */
   function mapBackendResponseToPopupFormat(backend, meta = {}) {
     const isFake = String(backend.verdict || "").toUpperCase() === "FAKE";
@@ -321,33 +329,51 @@ document.addEventListener("DOMContentLoaded", () => {
       ? "High Misinformation Impact"
       : "High Authenticity Impact";
 
-    const indicatorsRaw = Array.isArray(backend.indicators)
-      ? backend.indicators
+    const explanation = backend && typeof backend.explanation === "object"
+      ? backend.explanation
+      : null;
+
+    // Parse backend SHAP indicators safely (no hardcoded placeholders).
+    const indicatorsRaw = Array.isArray(explanation?.indicators)
+      ? explanation.indicators
       : [];
-    const indicators = indicatorsRaw.map((name, i) => {
-      const contributionPct = Math.max(10, 80 - i * 15);
-      const shap = isFake ? -(20 + i * 5) : 20 + i * 5;
+    const indicators = indicatorsRaw.map((ind) => {
+      const contributionRaw = Number(ind?.contribution_percent);
+      const contributionPct = Number.isFinite(contributionRaw)
+        ? clamp(contributionRaw, 0, 100)
+        : 0;
+      const indicatorTokens = Array.isArray(ind?.tokens)
+        ? ind.tokens.filter((token) => typeof token === "string" && token.trim().length > 0)
+        : [];
       return {
-        name: typeof name === "string" ? name : "Indicator",
-        shap,
+        name: typeof ind?.name === "string" && ind.name.trim() ? ind.name.trim() : "Indicator",
         contributionPct,
+        summary: typeof ind?.summary === "string" ? ind.summary : "",
+        tokens: indicatorTokens,
       };
     });
 
-    const tokensRaw = Array.isArray(backend.tokens) ? backend.tokens : [];
-    const topTokens = tokensRaw.map((t) => {
-      const impact = t.impact || "medium";
-      const isFakeToken =
-        String(t.label || "").toLowerCase().includes("fake") || isFake;
-      const shapMap = { high: 6, medium: 4, low: 2 };
-      const val = shapMap[impact] || shapMap.medium;
-      const shap = isFakeToken ? -val : val;
+    // Parse SHAP top tokens; fallback to legacy tokens if SHAP payload is missing.
+    const shapTokensRaw = Array.isArray(explanation?.top_tokens) ? explanation.top_tokens : [];
+    const legacyTokensRaw = Array.isArray(backend.tokens) ? backend.tokens : [];
+    const topTokens = (shapTokensRaw.length > 0 ? shapTokensRaw : legacyTokensRaw).map((t) => {
+      const scoreRaw = Number(t?.score);
+      const score = Number.isFinite(scoreRaw) ? scoreRaw : 0;
+      const direction = typeof t?.direction === "string" ? t.direction : "";
+      const impact = score >= 0.15 ? "high" : score >= 0.06 ? "medium" : "low";
       return {
-        text: t.text || "",
+        text: typeof t?.text === "string" ? t.text : "",
         impact,
-        shap,
+        shap: direction === "opposes_predicted_class" ? -score : score,
       };
-    });
+    }).filter((t) => t.text.trim().length > 0);
+
+    const note = typeof explanation?.note === "string"
+      ? explanation.note
+      : "SHAP values indicate feature contribution and do not verify factual correctness.";
+    const summary = `The model classified this article as ${isFake ? "FAKE" : "REAL"} with ${Math.min(100, Math.max(0, confidencePct)).toFixed(1)}% confidence. `
+      + "The explanation below shows which textual patterns contributed most to the prediction. "
+      + note;
 
     return {
       articleTitle: meta.articleTitle || "Untitled",
@@ -358,7 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
       topTokensTitle,
       topTokensLegend,
       topTokens,
-      summary: backend.summary || "No summary available.",
+      summary,
     };
   }
 
@@ -595,7 +621,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const indicatorRows = data.indicators
       .map((ind) => {
         const width = clamp(ind.contributionPct ?? 0, 0, 100);
-        const shapStr = `${formatSigned(ind.shap)}%`;
+        const contributionStr = `${Number(width).toFixed(1)}%`;
+        const indicatorSummary = ind.summary
+          ? `<div class="mt-1 text-xs text-gray-500 leading-relaxed">${escapeHtml(ind.summary)}</div>`
+          : "";
+        const indicatorTokens = Array.isArray(ind.tokens) && ind.tokens.length > 0
+          ? `<div class="mt-1 text-xs text-gray-500">Tokens: ${escapeHtml(ind.tokens.join(", "))}</div>`
+          : "";
         return `
           <div class="mt-4">
             <div class="h-3 w-full rounded-full" style="background:${theme.indicatorBg};">
@@ -605,7 +637,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="mt-2 flex items-center justify-between">
               <div class="text-sm text-gray-400">${escapeHtml(ind.name)}</div>
               <div class="flex items-center gap-2">
-                <div class="text-sm font-semibold text-[#1e2c3e]">${shapStr}</div>
+                <div class="text-sm font-semibold text-[#1e2c3e]">${contributionStr}</div>
                 <div class="h-5 w-5 rounded-full flex items-center justify-center" style="background:${theme.indicatorBg};">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M6 20V10" stroke="${theme.indicatorProgress}" stroke-width="2" stroke-linecap="round"/>
@@ -615,10 +647,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
               </div>
             </div>
+            ${indicatorSummary}
+            ${indicatorTokens}
           </div>
         `;
       })
       .join(" ");
+    const indicatorsBlock = indicatorRows || `
+      <div class="mt-3 text-sm text-gray-500 italic">
+        No SHAP indicators available for this analysis.
+      </div>
+    `;
 
     const tokenRows = data.topTokens
       .map((t) => {
@@ -675,9 +714,9 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="mt-6">
           <div class="flex items-end justify-between">
             <div class="text-base font-bold text-[#1e2c3e]">Key Indicators</div>
-            <div class="text-sm text-gray-500">SHAP Value</div>
+            <div class="text-sm text-gray-500">Contribution</div>
           </div>
-          ${indicatorRows}
+          ${indicatorsBlock}
         </div>
 
         <!-- Top Tokens -->

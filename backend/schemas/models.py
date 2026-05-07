@@ -25,7 +25,7 @@ class AnalyzeRequest(BaseModel):
         default="selection_only",
         description="Analysis mode: 'selection_only' or 'selection_fallback'",
     )
-    analyzer: Literal["svm", "roberta", "mock"] | None = Field(
+    analyzer: Literal["svm", "roberta", "xlmr", "mock"] | None = Field(
         default=None,
         description=(
             "Which backend to use for this request. "
@@ -47,6 +47,45 @@ class TokenResult(BaseModel):
     label: str = Field(..., description="Token classification: 'fake_signal' or 'real_signal'")
 
 
+class ExplanationTopToken(BaseModel):
+    """Top token contribution from SHAP for the predicted class."""
+
+    text: str = Field(..., description="Token text after normalization and cleanup")
+    score: float = Field(..., description="Absolute SHAP contribution score")
+    direction: str = Field(..., description="Direction relative to predicted class contribution")
+    indicator: str | None = Field(default=None, description="Mapped indicator name, if any")
+
+
+class ExplanationIndicator(BaseModel):
+    """Grouped contribution view used by frontend indicator visualizations."""
+
+    name: str = Field(..., description="Indicator category name")
+    contribution_percent: float = Field(
+        ..., description="Relative grouped SHAP contribution percentage (not confidence)"
+    )
+    tokens: list[str] = Field(..., description="Matched tokens grouped under this indicator")
+    summary: str = Field(..., description="Human-readable summary of this indicator's influence")
+
+
+class ExplanationResult(BaseModel):
+    """Optional SHAP explainability details attached to AnalyzeResponse."""
+
+    note: str = Field(
+        ...,
+        description=(
+            "SHAP explains feature contribution only and does not perform factual verification."
+        ),
+    )
+    top_tokens: list[ExplanationTopToken] = Field(
+        default_factory=list,
+        description="Top contributing tokens for the predicted class",
+    )
+    indicators: list[ExplanationIndicator] = Field(
+        default_factory=list,
+        description="Detected indicators with contribution share percentages",
+    )
+
+
 class AnalyzeResponse(BaseModel):
     """Full analysis result returned by /analyze."""
 
@@ -55,3 +94,10 @@ class AnalyzeResponse(BaseModel):
     summary: str = Field(..., description="Brief human-readable explanation of the result")
     indicators: list[str] = Field(..., description="List of detected indicators")
     tokens: list[TokenResult] = Field(..., description="Key tokens contributing to the verdict")
+    explanation: ExplanationResult | None = Field(
+        default=None,
+        description=(
+            "Optional explainability payload with SHAP token contributions. "
+            "When unavailable, this field may contain a fallback note."
+        ),
+    )
