@@ -1,0 +1,3 @@
+# Optional dev / CI dependencies (not required in production)
+-r requirements.txt
+pytest>=8.0.0

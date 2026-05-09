@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from core.config import UnknownAnalyzerBackendError
+from core.config import UnknownAnalyzerBackendError, cors_allow_origins
 from inference.factory import analyze_text
 
 # Import BOTH loaders
@@ -32,10 +32,12 @@ app = FastAPI(
     version="0.1.0",
 )
 
+_origins = cors_allow_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_origins,
+    # Credentials + wildcard origin is invalid in browsers; disable credentials unless pinning origins.
+    allow_credentials=bool(_origins != ["*"]),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,7 +58,6 @@ def roberta_dependencies_missing(_request: Request, exc: RoBERTaDependencyError)
     return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
-# 🔥 XLM-R (NEW)
 @app.exception_handler(XLMRArtifactError)
 def xlmr_artifacts_unavailable(_request: Request, exc: XLMRArtifactError):
     return JSONResponse(status_code=503, content={"detail": str(exc)})

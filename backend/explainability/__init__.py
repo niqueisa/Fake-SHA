@@ -1,6 +1,5 @@
 """
-Explainability hooks (SHAP, attention, etc.).
+Explainability (SHAP) helpers kept separate from `inference/`.
 
-Keep separate from `inference/` so SVM and RoBERTa can each have their own
-explainers without coupling training code to the API layer.
+Production SHAP for XLM-R lives in `explainability.xlmr_shap` and is invoked from the XLM-R analyzer.
 """

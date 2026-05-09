@@ -877,13 +877,21 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // Report issue (dummy)
+    // Feedback: open default mail client with context (no backend endpoint required).
     const btnReport = document.getElementById("btnReportIssue");
     if (btnReport) {
       btnReport.addEventListener("click", () => {
-        btnReport.textContent = "REPORTED (DUMMY)";
-        btnReport.disabled = true;
-        btnReport.classList.add("opacity-80", "cursor-not-allowed");
+        const subject = encodeURIComponent("FAKE-SHA feedback");
+        const lines = [
+          `Title: ${data.articleTitle || ""}`,
+          `URL: ${data.sourceUrl || ""}`,
+          `Verdict: ${data.label || ""}`,
+          `Confidence: ${typeof data.confidence === "number" ? `${data.confidence.toFixed(1)}%` : ""}`,
+          "",
+          data.summary ? `Summary:\n${data.summary}` : "",
+        ].filter(Boolean);
+        const body = encodeURIComponent(lines.join("\n"));
+        window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
       });
     }
 
