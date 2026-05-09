@@ -173,3 +173,17 @@ backend/artifacts/roberta/rng_state*.pth
 !backend/artifacts/svm/.keep
 !backend/artifacts/roberta/.keep
 !backend/artifacts/roberta/,keep
+
+# XLM-R artifacts (large binaries — not committed; keep directory with .keep)
+backend/artifacts/xlmr/checkpoint-*/
+backend/artifacts/xlmr/pytorch_model*.bin
+backend/artifacts/xlmr/model.safetensors
+backend/artifacts/xlmr/tokenizer.json
+backend/artifacts/xlmr/tokenizer_config.json
+backend/artifacts/xlmr/special_tokens_map.json
+backend/artifacts/xlmr/training_args.bin
+backend/artifacts/xlmr/trainer_state.json
+backend/artifacts/xlmr/optimizer.pt
+backend/artifacts/xlmr/scheduler.pt
+backend/artifacts/xlmr/rng_state*.pth
+!backend/artifacts/xlmr/.keep

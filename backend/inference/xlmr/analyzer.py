@@ -6,7 +6,7 @@ Confidence is computed using temperature scaling over logits for realistic proba
 
 from __future__ import annotations
 
-from core.config import shap_enabled
+from core.config import shap_enabled, xlmr_inference_temperature
 from explainability.xlmr_shap import build_shap_explanation, explanation_unavailable
 from .loader import load_bundle
 from .preprocess import build_model_input
@@ -46,6 +46,7 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
             summary="No text provided for analysis.",
             indicators=[],
             tokens=[],
+            explanation=None,
         )
 
     # Load model bundle (XLM-R)
@@ -109,7 +110,7 @@ def predict_proba_texts(texts: list[str], bundle=None):
         outputs = model(**encoded)
         logits = outputs.logits
 
-    temperature = 10.0
+    temperature = xlmr_inference_temperature()
     scaled_logits = logits / temperature
     probs = torch.softmax(scaled_logits, dim=-1)
     return probs

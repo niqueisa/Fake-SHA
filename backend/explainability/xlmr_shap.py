@@ -12,11 +12,20 @@ import math
 import re
 from dataclasses import dataclass
 from functools import lru_cache
+import hashlib
+from collections import OrderedDict
 from typing import Any
 
 import numpy as np
 
-from core.config import shap_max_evals, shap_max_words, shap_top_k
+from core.config import (
+    shap_cache_enabled,
+    shap_cache_maxsize,
+    shap_max_evals,
+    shap_max_words,
+    shap_top_k,
+    xlmr_inference_temperature,
+)
 from inference.xlmr.loader import XLMRBundle
 from schemas.models import ExplanationIndicator, ExplanationResult, ExplanationTopToken
 
@@ -40,6 +49,19 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "insulted", "insult", "accused", "accuse", "blamed", "blame", "outrage",
         "outraged", "furious", "shame", "shameful", "disappointed", "disappointing",
         "concern", "concerned", "warning", "warned", "warn",
+        # More English evaluative/tone
+        "horrific", "horrifying", "terrifying", "terrified", "disturbing", "disturbed",
+        "devastating", "tragic", "tragedy", "heartbreaking", "heartbroken",
+        "stress", "stressed", "anxious", "anxiety", "frustrated", "frustrating",
+        "disgusting", "disgusted", "infuriating", "enraged", "rage",
+        "livid", "upset", "shocked", "shockingly", "appalled", "appalling",
+        "suspicious", "suspicion", "outrageous", "hateful", "hate",
+        "support", "supported", "supporting", "admire", "admired", "admiration",
+        "respect", "respected", "disrespect", "disrespected",
+        "celebrate", "celebrated", "celebration", "critic", "criticism",
+        "attack", "attacked", "slammed", "blast", "blasted",
+        "call out", "called out", "denounce", "denounced",
+        "protest", "protested", "protesting", "uproar",
         "galit", "nagagalit", "kinagalit", "takot", "natakot", "nakakatakot",
         "pangamba", "nangangamba", "kabado", "nakakabahala", "banta", "nagbabanta",
         "delikado", "panganib", "mapanganib", "gulat", "nagulat", "nakakagulat",
@@ -47,6 +69,20 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "kinondena", "kondena", "pinuna", "batikos", "binatikos", "puna",
         "pinuri", "papuri", "inis", "naiinis", "napahiya", "kahihiyan",
         "sinisi", "sisi", "nakakainis", "nakakabigla", "babala", "nagbabala",
+        # More Tagalog/Taglish tone + common slang/emphasis
+        "nakakagalit", "galit na galit", "gigigil", "naiirita", "irita",
+        "nakakabwisit", "bwisit", "badtrip", "nakakabadtrip",
+        "kabog", "grabe", "grabeh", "grabe naman", "grabeng", "sobrang", "sobra",
+        "nakakaloka", "loka", "nakakainis", "nakakairita",
+        "nakakagigil", "nakakahiya", "hiya", "nakakahiya naman",
+        "nakakapanlumo", "panlumo", "nakakadepress", "depress", "depressed",
+        "nakakaawa", "awa", "kawawa", "nakakaiyak", "iyak na iyak",
+        "nakakatuwa", "tuwa", "aliw", "nakakaaliw",
+        "shook", "shookt", "OMG", "omg", "wtf", "lmao", "lol",
+        "sus", "suss", "hmm", "hays", "hay", "grrr",
+        "pikon", "napikon", "pikon na pikon", "as in",
+        "nakakatakot", "nakakakaba", "kaba", "nakakakilabot", "kilabot",
+        "nakakapangilabot", "nakakabahala", "nakakabother",
     ],
     "Claim Certainty": [
         "confirmed", "confirm", "proven", "proved", "proof", "definitely",
@@ -56,6 +92,16 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "claims", "alleged", "allegedly", "reportedly", "supposedly",
         "rumored", "rumour", "rumor", "possible", "possibly", "may", "might",
         "could", "likely", "unlikely", "said to be", "believed", "according",
+        # More English epistemic cues
+        "assert", "asserted", "assertion", "insist", "insisted", "insisting",
+        "deny", "denied", "denial", "refute", "refuted", "debunk", "debunked",
+        "fact", "facts", "factually", "no doubt", "without doubt",
+        "certain", "certainty", "uncertain", "uncertainty", "unclear",
+        "seems", "seemingly", "appears", "apparently", "suggests", "suggested",
+        "estimate", "estimated", "estimates", "roughly", "approximately",
+        "about", "around", "at least", "at most",
+        "impossible", "definitive", "conclusive", "inconclusive",
+        "confirmed by", "unconfirmed", "not confirmed",
         "kumpirmado", "kinumpirma", "patunay", "napatunayan", "pinatunayan",
         "sigurado", "tiyak", "tiyak na", "talaga", "totoo", "hindi totoo",
         "peke", "huwad", "di umano", "umano", "diumano", "sinasabing",
@@ -63,6 +109,14 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "posible", "malamang", "hindi maaari", "dapat", "hindi dapat",
         "walang duda", "klaro", "malinaw", "inaangkin", "pahayag",
         "balitang", "usap usapan", "kumakalat",
+        # More Tagalog/Taglish certainty/hedging
+        "katiyakan", "siguradong", "tiyak na tiyak", "totoong", "tunay",
+        "hindi raw", "raw", "daw", "sabi daw", "diumano", "di-umano",
+        "pinapaniwalaan", "pinaniniwalaan", "inaakala", "akala", "parang",
+        "mukhang", "tila", "posibleng", "maaaring", "baka", "siguro",
+        "malinaw na", "klarong", "walang alinlangan", "walang duda",
+        "pawang", "totoo ba", "legit", "legit ba", "peke ba", "fake ba",
+        "confirmed na", "kumpirmado na",
     ],
     "Presence of Evidence-related Language": [
         "evidence", "proof", "data", "record", "records", "document",
@@ -72,6 +126,20 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "official statement", "press release", "certificate", "court record",
         "medical record", "police report", "audit", "verified", "verification",
         "fact check", "factcheck", "fact checked", "based on", "according to",
+        # More evidence/verification terms (English)
+        "dataset", "methodology", "methods", "peer reviewed", "peer-reviewed",
+        "journal", "publication", "published", "preprint", "meta analysis", "meta-analysis",
+        "clinical trial", "trial", "randomized", "double blind", "double-blind",
+        "case study", "case report", "laboratory", "lab", "test results",
+        "eeg", "mri", "ct scan", "x ray", "x-ray", "blood test",
+        "court filing", "complaint", "affidavit", "sworn statement", "testimony",
+        "transcript", "minutes", "resolution", "memorandum", "circular",
+        "policy", "guidelines", "protocol", "standard operating procedure", "sop",
+        "invoice", "receipt", "contract", "agreement",
+        "election return", "er", "certificate of canvass", "coc", "cocp",
+        "official tally", "canvass", "canvassing",
+        "evidence shows", "documented", "documentation", "records show",
+        "confirmed in", "as per", "based upon",
         "ebidensya", "patunay", "datos", "rekord", "tala", "dokumento",
         "ulat", "pag aaral", "saliksik", "imbestigasyon", "sinisiyasat",
         "natuklasan", "resulta", "pagsusuri", "sarvey", "estadistika",
@@ -79,6 +147,14 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "sertipiko", "rekord ng korte", "ulat ng pulis",
         "beripikado", "beripikasyon", "batay sa",
         "ayon sa ulat", "base sa", "basehan", "katibayan",
+        # More Tagalog/Taglish evidence terms
+        "beripikasyon", "beripikado", "na-verify", "na verify", "verify",
+        "dokyumento", "dokyu", "resibo", "kontrata", "kasunduan",
+        "testigo", "patotoo", "salaysay", "sinumpaang salaysay",
+        "resolusyon", "memorandum", "circular", "polisiya", "patakaran",
+        "gabayan", "guidelines", "protocol", "proseso", "pamamaraan",
+        "rekord", "talaan", "tala", "tala ng korte", "kaso", "demanda",
+        "lab test", "resulta ng test", "resulta ng pagsusuri",
     ],
     "Textual Source Attribution Mentions": [
         "said", "says", "stated", "announced", "according", "according to",
@@ -90,12 +166,43 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "house", "doh", "deped", "dilg", "comelec", "pnp", "nbi", "doj",
         "pna", "philippine news agency", "vera files", "rappler", "gma",
         "abs cbn", "cnn philippines", "inquirer", "philstar", "manila bulletin",
+        # More PH institutions / agencies / courts (common in PH articles)
+        "dswd", "dti", "dost", "da", "denr", "dpwh", "dot", "dof", "doh", "dole",
+        "ltfrb", "ltto", "lto", "mmda", "pagasa", "phivolcs", "neda",
+        "doh", "who", "un", "unesco", "unicef",
+        "sec", "bir", "bsp", "philhealth", "sss", "gsis",
+        "pcso", "prc", "ched", "tesda",
+        "afp", "pnp", "pnpa", "pcg", "philippine coast guard",
+        "dotr", "ltfrb", "caap", "marina",
+        "drrmo", "bdrrmo", "lgu", "barangay", "city hall",
+        "malacañang", "malacanang", "op", "office of the president",
+        "iATF", "iatf", "inter-agency task force",
+        "supreme court", "court of appeals", "sandiganbayan",
+        "ombudsman", "commission on audit", "coa",
+        # Media outlets / programs / fact-check orgs
+        "gma news", "gma network", "gma integrated news",
+        "abs cbn news", "abscbn news", "tv patrol",
+        "cnnph", "cnn philippines", "one news", "tv5",
+        "inquirer.net", "philstar.com", "mb.com.ph", "manila bulletin",
+        "manila times", "the manila times", "businessworld",
+        "sunstar", "sun star", "cebu daily news",
+        "interaksyon", "news5", "ptv", "ptv4", "radyo pilipinas",
+        "dzmm", "dzbb", "dwiz", "dzrh", "rmn",
+        "fact check", "factcheck", "verafiles fact check", "vera files fact check",
+        "tsek.ph", "tsekph", "poynter",
         "sinabi", "ayon", "ayon kay", "ayon sa", "pahayag", "ipinahayag",
         "iniulat", "ulat", "anunsyo", "inanunsyo", "tagapagsalita",
         "opisyal", "ahensya", "kagawaran", "gobyerno", "pangulo",
         "senador", "alkalde", "gobernador", "pulis", "awtoridad",
         "eksperto", "mananaliksik", "mamamahayag", "hukuman", "korte",
         "kongreso", "senado", "kamara", "barangay", "lgu", "lokal na pamahalaan",
+        # More Tagalog/Taglish attribution phrases
+        "ayon sa mga ulat", "ayon sa report", "ayon sa pahayag",
+        "sa panayam", "panayam", "interview", "iniinterview",
+        "presscon", "press con", "press conference",
+        "sinabi ni", "sabi ni", "sabi ng", "pahayag ni", "pahayag ng",
+        "inihayag", "inihayag ni", "inihayag ng",
+        "iniulat ni", "iniulat ng", "ayon sa kanya", "ayon sa kanila",
     ],
     "Sensationalism": [
         "viral", "shocking", "shock", "exposed", "expose", "unbelievable",
@@ -105,6 +212,15 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "finally revealed", "hidden truth", "banned", "censored", "you wont believe",
         "wow", "amazing", "miracle", "instant", "destroyed", "humiliated",
         "caught", "caught on camera", "exclusive", "latest", "trending", "omg",
+        # More clickbait patterns (English)
+        "here s why", "heres why", "what happens next", "what happened next",
+        "this is why", "this changes everything", "mind blown", "mindblown",
+        "jaw dropping", "jaw-dropping", "insane", "crazy", "wild",
+        "epic", "massive", "huge", "biggest", "worst", "best ever",
+        "unreal", "no one saw this coming", "shocking truth", "truth bomb",
+        "warning!", "alert!", "breaking!", "exclusive!", "just in",
+        "must read", "must-watch", "must-see", "watch now", "share now",
+        "goes viral", "trending now", "everyone is talking about",
         "kumalat", "kalat", "nakakagulat", "gulat", "ibinunyag",
         "binunyag", "pasabog", "eskandalo", "sekreto", "lihim",
         "kumalat na video", "panoorin", "i share",
@@ -113,6 +229,15 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "wasak", "pinahiya", "nahuli", "huli sa camera", "eksklusibo",
         "pinakabago", "mainit na balita", "abangan",
         "alam niyo ba", "hindi mo aakalain", "ikakagulat mo",
+        # More Tagalog/Taglish clickbait / CTA
+        "panoorin ngayon", "panoorin na", "panuorin", "panuorin na",
+        "i-share ngayon", "ishare", "ishare mo", "share mo", "share natin",
+        "i-like", "like", "i-comment", "comment", "subscribe",
+        "abangan ang susunod", "abangan mo", "huwag palampasin",
+        "grabe to", "grabe ito", "sobra na", "sobra to",
+        "hindi ka maniniwala", "di ka maniniwala", "di mo aakalain",
+        "nakakaloka", "nakakagulantang", "gulantang", "pasabog",
+        "explosive", "bombahan", "bombshell", "mainit", "hot",
     ],
 }
 
@@ -247,7 +372,7 @@ def _predict_proba_fn(bundle: XLMRBundle):
         with torch.no_grad():
             outputs = model(**encoded)
             logits = outputs.logits
-            probs = torch.softmax(logits / 10.0, dim=-1)
+            probs = torch.softmax(logits / xlmr_inference_temperature(), dim=-1)
         return probs.detach().cpu().numpy()
 
     return _predict
@@ -291,9 +416,22 @@ def build_shap_explanation(
     if not clipped.strip():
         return ExplanationResult(note=_EXPLANATION_NOTE, top_tokens=[], indicators=[])
 
+    # Fast path: cache exact SHAP output for repeated selections.
+    cached = _get_cached_explanation(
+        clipped,
+        predicted_class_index=predicted_class_index,
+        max_evals=max_evals or shap_max_evals(),
+        max_words=shap_max_words(),
+        top_k=shap_top_k(),
+        temperature=xlmr_inference_temperature(),
+    )
+    if cached is not None:
+        return cached
+
     explainer = _get_shap_explainer()
     # Keep evaluation budget bounded for API latency.
-    shap_values = explainer([clipped], max_evals=max_evals or shap_max_evals())
+    used_max_evals = max_evals or shap_max_evals()
+    shap_values = explainer([clipped], max_evals=used_max_evals)
 
     raw_tokens = list(np.asarray(shap_values.data[0]).tolist())
     raw_scores = _extract_class_values(shap_values.values, predicted_class_index)
@@ -343,7 +481,97 @@ def build_shap_explanation(
                 )
             )
 
-    return ExplanationResult(note=_EXPLANATION_NOTE, top_tokens=top_tokens, indicators=indicators)
+    result = ExplanationResult(note=_EXPLANATION_NOTE, top_tokens=top_tokens, indicators=indicators)
+    _put_cached_explanation(
+        clipped,
+        predicted_class_index=predicted_class_index,
+        max_evals=used_max_evals,
+        max_words=shap_max_words(),
+        top_k=shap_top_k(),
+        temperature=xlmr_inference_temperature(),
+        value=result,
+    )
+    return result
+
+
+# -----------------------------------------------------------------------------
+# SHAP result caching
+# -----------------------------------------------------------------------------
+
+_SHAP_CACHE: "OrderedDict[str, ExplanationResult]" = OrderedDict()
+
+
+def _cache_key(
+    text: str,
+    *,
+    predicted_class_index: int,
+    max_evals: int,
+    max_words: int,
+    top_k: int,
+    temperature: float,
+) -> str:
+    # Hash the text to avoid keeping long strings as keys.
+    h = hashlib.sha256(text.encode("utf-8", errors="ignore")).hexdigest()
+    return f"{h}|c={predicted_class_index}|e={max_evals}|w={max_words}|k={top_k}|t={temperature}"
+
+
+def _get_cached_explanation(
+    text: str,
+    *,
+    predicted_class_index: int,
+    max_evals: int,
+    max_words: int,
+    top_k: int,
+    temperature: float,
+) -> ExplanationResult | None:
+    if not shap_cache_enabled():
+        return None
+    maxsize = shap_cache_maxsize()
+    if maxsize <= 0:
+        return None
+    key = _cache_key(
+        text,
+        predicted_class_index=predicted_class_index,
+        max_evals=max_evals,
+        max_words=max_words,
+        top_k=top_k,
+        temperature=temperature,
+    )
+    value = _SHAP_CACHE.get(key)
+    if value is None:
+        return None
+    # LRU touch
+    _SHAP_CACHE.move_to_end(key)
+    return value
+
+
+def _put_cached_explanation(
+    text: str,
+    *,
+    predicted_class_index: int,
+    max_evals: int,
+    max_words: int,
+    top_k: int,
+    temperature: float,
+    value: ExplanationResult,
+) -> None:
+    if not shap_cache_enabled():
+        return
+    maxsize = shap_cache_maxsize()
+    if maxsize <= 0:
+        return
+    key = _cache_key(
+        text,
+        predicted_class_index=predicted_class_index,
+        max_evals=max_evals,
+        max_words=max_words,
+        top_k=top_k,
+        temperature=temperature,
+    )
+    _SHAP_CACHE[key] = value
+    _SHAP_CACHE.move_to_end(key)
+    while len(_SHAP_CACHE) > maxsize:
+        _SHAP_CACHE.popitem(last=False)
 
 
 def explanation_unavailable(note: str | None = None) -> ExplanationResult:
@@ -353,47 +581,3 @@ def explanation_unavailable(note: str | None = None) -> ExplanationResult:
         top_tokens=[],
         indicators=[],
     )
-
-
-def demo_explanation_output() -> ExplanationResult:
-    """
-    Small local demo payload used by tests/docs without running SHAP.
-
-    This mirrors the frontend shape (`top_tokens`, `indicators`) using manually
-    constructed contributions.
-    """
-    sample_scores = [
-        _TokenContribution(text="viral", score=0.213),
-        _TokenContribution(text="shocking", score=0.172),
-        _TokenContribution(text="reportedly", score=0.121),
-        _TokenContribution(text="according to", score=0.099),
-    ]
-
-    top_tokens: list[ExplanationTopToken] = []
-    grouped_abs_sum: dict[str, float] = {}
-    grouped_tokens: dict[str, set[str]] = {}
-    for item in sample_scores:
-        indicator = _match_indicator(item.text)
-        top_tokens.append(
-            ExplanationTopToken(
-                text=item.text,
-                score=round(abs(item.score), 6),
-                direction="supports_predicted_class",
-                indicator=indicator,
-            )
-        )
-        if indicator:
-            grouped_abs_sum[indicator] = grouped_abs_sum.get(indicator, 0.0) + abs(item.score)
-            grouped_tokens.setdefault(indicator, set()).add(item.text)
-
-    total_grouped = sum(grouped_abs_sum.values()) or 1.0
-    indicators = [
-        ExplanationIndicator(
-            name=name,
-            contribution_percent=round((value / total_grouped) * 100.0, 2),
-            tokens=sorted(grouped_tokens[name]),
-            summary=_INDICATOR_SUMMARY[name],
-        )
-        for name, value in sorted(grouped_abs_sum.items(), key=lambda x: x[1], reverse=True)
-    ]
-    return ExplanationResult(note=_EXPLANATION_NOTE, top_tokens=top_tokens, indicators=indicators)

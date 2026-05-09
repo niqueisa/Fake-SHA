@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from core.config import ARTIFACTS_XLMR_DIR
+from core.config import get_xlmr_artifacts_dir
 
 
 class XLMRArtifactError(RuntimeError):
@@ -77,8 +77,7 @@ def load_bundle() -> XLMRBundle:
             "Install with: pip install torch transformers safetensors"
         ) from e
 
-    # Keep model location config-driven so future model replacement is path-only.
-    model_dir = ARTIFACTS_XLMR_DIR
+    model_dir = get_xlmr_artifacts_dir()
 
     _require_artifacts(model_dir)
 

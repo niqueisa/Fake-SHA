@@ -1,6 +1,6 @@
 # FAKE-SHA Backend
 
-FastAPI backend for fake news detection. Inference lives under `inference/` (SVM + TF‑IDF, optional Hugging Face RoBERTa, and a keyword mock). Training scripts live under `training/` and are not imported by the API at runtime.
+FastAPI backend for fake news detection. Inference lives under `inference/` (SVM + TF‑IDF, optional Hugging Face RoBERTa/XLM‑R, and a keyword mock). Training scripts live under `training/` and are not imported by the API at runtime.
 
 > **See [../README.md](../README.md)** for full project context (extension, structure, setup overview).
 
@@ -11,12 +11,13 @@ backend/
 ├── main.py                 # FastAPI app, routes, CORS
 ├── core/                   # Config (paths, FAKE_SHA_ANALYZER)
 ├── schemas/                # Pydantic request/response models (API contract)
-├── inference/              # Classifiers: svm/, roberta/, mock/, factory.py
-├── explainability/         # Future: SHAP / attention (separate from inference)
+├── inference/              # Classifiers: svm/, roberta/, xlmr/, mock/, factory.py
+├── explainability/         # SHAP helpers for XLM-R (`xlmr_shap.py`)
 ├── storage/                # Supabase client + record_store
 ├── artifacts/              # Saved model weights (not Python code)
 │   ├── svm/                # svm_model.pkl, tfidf_vectorizer.pkl, threshold
-│   └── roberta/            # Hugging Face save_pretrained (config, weights, tokenizer)
+│   ├── roberta/            # Hugging Face save_pretrained (config, weights, tokenizer)
+│   └── xlmr/               # XLM-R save_pretrained (large files ignored by git; mount at deploy)
 ├── training/               # train_svm.py (CLI; writes to artifacts/svm/)
 ├── sql/
 │   └── analysis_records.sql
@@ -31,20 +32,26 @@ backend/
 |------|---------|
 | `main.py` | FastAPI app: `GET /health`, `POST /analyze`. Delegates to `inference.factory.analyze_text`. |
 | `schemas/models.py` | `AnalyzeRequest`, `AnalyzeResponse`, `TokenResult`. |
-| `inference/factory.py` | Chooses analyzer via env `FAKE_SHA_ANALYZER` or request field `analyzer` (`svm` \| `roberta` \| `mock`). |
+| `inference/factory.py` | Chooses analyzer via env `FAKE_SHA_ANALYZER` or request field `analyzer` (`svm` \| `roberta` \| `xlmr` \| `mock`). |
 | `inference/svm/analyzer.py` | Loads artifacts from `artifacts/svm/`, runs LinearSVC + TF‑IDF. |
 | `inference/roberta/` | Sequence classification via `transformers` + weights under `artifacts/roberta/`. |
+| `inference/xlmr/` | XLM-R sequence classification + optional SHAP explanations. |
 | `inference/mock/analyzer.py` | Keyword-based mock (for local demos). |
 | `storage/` | Supabase optional persistence. |
 | `training/train_svm.py` | Train SVM; saves pickles under `artifacts/svm/`. |
-| `explainability/` | Placeholder package for future SHAP hooks. |
+| `explainability/xlmr_shap.py` | SHAP text explainer + indicator grouping for `/analyze` optional `explanation`. |
 
 ## Environment
 
 | Variable | Meaning |
 |----------|---------|
 | `SUPABASE_URL`, `SUPABASE_KEY` | Optional; if set, analyses are stored in Supabase. |
-| `FAKE_SHA_ANALYZER` | `svm` (default), `roberta`, or `mock`. Invalid values return HTTP 400. |
+| `FAKE_SHA_ANALYZER` | `svm` (default), `roberta`, `xlmr`, or `mock`. Invalid values return HTTP 400. |
+| `FAKE_SHA_XLMR_ARTIFACT_DIR` | Optional path to XLM-R `save_pretrained` folder (defaults to `backend/artifacts/xlmr`). Alias: `FAKE_SHA_XLMR_MODEL`. |
+| `FAKE_SHA_XLMR_TEMPERATURE` | Softmax temperature for XLM-R confidence and SHAP wrapper (default `10.0`). |
+| `ENABLE_SHAP` | `true`/`false` — attach SHAP `explanation` on XLM-R responses when enabled. |
+| `SHAP_MAX_WORDS`, `SHAP_TOP_K`, `SHAP_MAX_EVALS` | SHAP input budget / token cap / partition eval cap. |
+| `FAKE_SHA_CORS_ORIGINS` | `*` or comma-separated origins; pinned origins enable `Access-Control-Allow-Credentials`. |
 
 ## Setup
 
@@ -72,6 +79,13 @@ From the **`backend/`** directory (so imports resolve):
 
 ```powershell
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Tests (optional)
+
+```powershell
+pip install -r requirements-dev.txt
+pytest tests/
 ```
 
 ## Training (SVM)
