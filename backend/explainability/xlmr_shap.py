@@ -49,7 +49,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "insulted", "insult", "accused", "accuse", "blamed", "blame", "outrage",
         "outraged", "furious", "shame", "shameful", "disappointed", "disappointing",
         "concern", "concerned", "warning", "warned", "warn",
-        # More English evaluative/tone
         "horrific", "horrifying", "terrifying", "terrified", "disturbing", "disturbed",
         "devastating", "tragic", "tragedy", "heartbreaking", "heartbroken",
         "stress", "stressed", "anxious", "anxiety", "frustrated", "frustrating",
@@ -69,7 +68,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "kinondena", "kondena", "pinuna", "batikos", "binatikos", "puna",
         "pinuri", "papuri", "inis", "naiinis", "napahiya", "kahihiyan",
         "sinisi", "sisi", "nakakainis", "nakakabigla", "babala", "nagbabala",
-        # More Tagalog/Taglish tone + common slang/emphasis
         "nakakagalit", "galit na galit", "gigigil", "naiirita", "irita",
         "nakakabwisit", "bwisit", "badtrip", "nakakabadtrip",
         "kabog", "grabe", "grabeh", "grabe naman", "grabeng", "sobrang", "sobra",
@@ -83,6 +81,11 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "pikon", "napikon", "pikon na pikon", "as in",
         "nakakatakot", "nakakakaba", "kaba", "nakakakilabot", "kilabot",
         "nakakapangilabot", "nakakabahala", "nakakabother",
+        "nakaka stress", "stressful", "nakakapraning", "praning",
+        "nakakagago", "gigil much", "iyak tawa", "nakakaiyak na lang",
+        "sumabog ang damdamin", "nanlumo", "nakakapanikot ng ulo",
+        "dismayado", "dismaya", "nakakadismaya", "napapamura",
+        "nakakagulat talaga", "sakit sa ulo", "nakaka frustrate",
     ],
     "Claim Certainty": [
         "confirmed", "confirm", "proven", "proved", "proof", "definitely",
@@ -92,7 +95,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "claims", "alleged", "allegedly", "reportedly", "supposedly",
         "rumored", "rumour", "rumor", "possible", "possibly", "may", "might",
         "could", "likely", "unlikely", "said to be", "believed", "according",
-        # More English epistemic cues
         "assert", "asserted", "assertion", "insist", "insisted", "insisting",
         "deny", "denied", "denial", "refute", "refuted", "debunk", "debunked",
         "fact", "facts", "factually", "no doubt", "without doubt",
@@ -109,7 +111,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "posible", "malamang", "hindi maaari", "dapat", "hindi dapat",
         "walang duda", "klaro", "malinaw", "inaangkin", "pahayag",
         "balitang", "usap usapan", "kumakalat",
-        # More Tagalog/Taglish certainty/hedging
         "katiyakan", "siguradong", "tiyak na tiyak", "totoong", "tunay",
         "hindi raw", "raw", "daw", "sabi daw", "diumano", "di-umano",
         "pinapaniwalaan", "pinaniniwalaan", "inaakala", "akala", "parang",
@@ -117,6 +118,11 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "malinaw na", "klarong", "walang alinlangan", "walang duda",
         "pawang", "totoo ba", "legit", "legit ba", "peke ba", "fake ba",
         "confirmed na", "kumpirmado na",
+        "for sure", "sure na", "sureball", "sure ball",
+        "100 percent", "100%", "walang kaso", "solid na",
+        "hindi pa kumpirmado", "unverified", "di verified",
+        "parang totoo", "mukhang totoo", "mukhang fake",
+        "baka naman", "pwede rin", "posibleng totoo", "hindi sigurado",
     ],
     "Presence of Evidence-related Language": [
         "evidence", "proof", "data", "record", "records", "document",
@@ -126,7 +132,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "official statement", "press release", "certificate", "court record",
         "medical record", "police report", "audit", "verified", "verification",
         "fact check", "factcheck", "fact checked", "based on", "according to",
-        # More evidence/verification terms (English)
         "dataset", "methodology", "methods", "peer reviewed", "peer-reviewed",
         "journal", "publication", "published", "preprint", "meta analysis", "meta-analysis",
         "clinical trial", "trial", "randomized", "double blind", "double-blind",
@@ -147,7 +152,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "sertipiko", "rekord ng korte", "ulat ng pulis",
         "beripikado", "beripikasyon", "batay sa",
         "ayon sa ulat", "base sa", "basehan", "katibayan",
-        # More Tagalog/Taglish evidence terms
         "beripikasyon", "beripikado", "na-verify", "na verify", "verify",
         "dokyumento", "dokyu", "resibo", "kontrata", "kasunduan",
         "testigo", "patotoo", "salaysay", "sinumpaang salaysay",
@@ -155,6 +159,12 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "gabayan", "guidelines", "protocol", "proseso", "pamamaraan",
         "rekord", "talaan", "tala", "tala ng korte", "kaso", "demanda",
         "lab test", "resulta ng test", "resulta ng pagsusuri",
+        "statement of assets", "saln", "statement of campaign contributions",
+        "soce", "certificate of candidacy", "candidacy", "coc filing",
+        "barangay blotter", "incident report", "forensic", "forensics",
+        "satellite image", "geotag", "metadata", "source code",
+        "open data", "foi", "freedom of information", "foi request",
+        "official gazette", "gazette", "government data",
     ],
     "Textual Source Attribution Mentions": [
         "said", "says", "stated", "announced", "according", "according to",
@@ -166,7 +176,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "house", "doh", "deped", "dilg", "comelec", "pnp", "nbi", "doj",
         "pna", "philippine news agency", "vera files", "rappler", "gma",
         "abs cbn", "cnn philippines", "inquirer", "philstar", "manila bulletin",
-        # More PH institutions / agencies / courts (common in PH articles)
         "dswd", "dti", "dost", "da", "denr", "dpwh", "dot", "dof", "doh", "dole",
         "ltfrb", "ltto", "lto", "mmda", "pagasa", "phivolcs", "neda",
         "doh", "who", "un", "unesco", "unicef",
@@ -179,7 +188,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "iATF", "iatf", "inter-agency task force",
         "supreme court", "court of appeals", "sandiganbayan",
         "ombudsman", "commission on audit", "coa",
-        # Media outlets / programs / fact-check orgs
         "gma news", "gma network", "gma integrated news",
         "abs cbn news", "abscbn news", "tv patrol",
         "cnnph", "cnn philippines", "one news", "tv5",
@@ -190,13 +198,20 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "dzmm", "dzbb", "dwiz", "dzrh", "rmn",
         "fact check", "factcheck", "verafiles fact check", "vera files fact check",
         "tsek.ph", "tsekph", "poynter",
+        "mindanews", "mindanao times", "davao today", "bombo radyo",
+        "brigada news", "abante", "bandera", "tempo", "journal online",
+        "cebuano", "iloilo", "baguio", "pampanga", "zamboanga",
+        "ppcrv", "namfrel", "eleksyon", "election watchdog",
+        "barangay captain", "sk chairman", "city council", "sangguniang bayan",
+        "sangguniang panlungsod", "governor s office", "mayor s office",
+        "house of representatives", "commission on elections",
+        "office of civil defense", "ocd", "ndrrmc",
         "sinabi", "ayon", "ayon kay", "ayon sa", "pahayag", "ipinahayag",
         "iniulat", "ulat", "anunsyo", "inanunsyo", "tagapagsalita",
         "opisyal", "ahensya", "kagawaran", "gobyerno", "pangulo",
         "senador", "alkalde", "gobernador", "pulis", "awtoridad",
         "eksperto", "mananaliksik", "mamamahayag", "hukuman", "korte",
         "kongreso", "senado", "kamara", "barangay", "lgu", "lokal na pamahalaan",
-        # More Tagalog/Taglish attribution phrases
         "ayon sa mga ulat", "ayon sa report", "ayon sa pahayag",
         "sa panayam", "panayam", "interview", "iniinterview",
         "presscon", "press con", "press conference",
@@ -212,7 +227,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "finally revealed", "hidden truth", "banned", "censored", "you wont believe",
         "wow", "amazing", "miracle", "instant", "destroyed", "humiliated",
         "caught", "caught on camera", "exclusive", "latest", "trending", "omg",
-        # More clickbait patterns (English)
         "here s why", "heres why", "what happens next", "what happened next",
         "this is why", "this changes everything", "mind blown", "mindblown",
         "jaw dropping", "jaw-dropping", "insane", "crazy", "wild",
@@ -229,7 +243,6 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "wasak", "pinahiya", "nahuli", "huli sa camera", "eksklusibo",
         "pinakabago", "mainit na balita", "abangan",
         "alam niyo ba", "hindi mo aakalain", "ikakagulat mo",
-        # More Tagalog/Taglish clickbait / CTA
         "panoorin ngayon", "panoorin na", "panuorin", "panuorin na",
         "i-share ngayon", "ishare", "ishare mo", "share mo", "share natin",
         "i-like", "like", "i-comment", "comment", "subscribe",
@@ -238,6 +251,13 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "hindi ka maniniwala", "di ka maniniwala", "di mo aakalain",
         "nakakaloka", "nakakagulantang", "gulantang", "pasabog",
         "explosive", "bombahan", "bombshell", "mainit", "hot",
+        "full video", "watch till the end", "watch till end", "part 1", "part 2",
+        "must try", "life changing", "life-changing", "secret revealed",
+        "exclusive leak", "breaking update", "teaser", "teaser lang",
+        "netizens react", "netizens furious", "netizens shocked",
+        "kakaiba", "sarap panuorin", "grabe ang nangyari", "sumabog sa internet",
+        "pinag uusapan", "usap usapan ngayon", "kumatok sa social media",
+        "viral ngayon", "nag viral", "nag-viral",
     ],
 }
 
