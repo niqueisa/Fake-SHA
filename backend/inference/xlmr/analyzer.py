@@ -1,5 +1,5 @@
 """
-XLM-RoBERTa inference: same AnalyzeResponse contract as SVM and mock.
+XLM-RoBERTa inference: same AnalyzeResponse contract as SVM and RoBERTa.
 
 Confidence is computed using temperature scaling over logits for realistic probabilities.
 """
@@ -44,6 +44,11 @@ def _calibrate_confidence(probs_vec: torch.Tensor, pred_idx: int) -> float:
     This widens confidence range in a controlled way:
     - clearer predictions move slightly upward
     - uncertain predictions move slightly downward
+
+    Certainty uses two signals:
+    1) top-2 margin (how far winner is from runner-up),
+    2) normalized entropy (how concentrated the full distribution is).
+    Config weights control the blend and overall calibration strength.
     """
     probs = probs_vec.detach().float().cpu()
     n_classes = max(2, int(probs.numel()))

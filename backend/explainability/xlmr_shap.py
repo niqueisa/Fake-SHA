@@ -475,6 +475,10 @@ def _normalize_token(raw: str) -> str:
 def _readable_token_text(raw: str) -> str:
     """
     Improve readability for glued token strings from subword/tokenizer artifacts.
+
+    This is intentionally conservative: we only add boundaries for very common
+    machine-token artifacts (URL joins, camel-case joins, alpha<->digit joins).
+    We avoid aggressive dictionary-based splitting to prevent corrupting words.
     """
     text = _normalize_token(raw)
     if not text or " " in text:
@@ -504,6 +508,11 @@ def _collapse_subword_contributions(
 ) -> list[_TokenContribution]:
     """
     Collapse contiguous XLM-R/GPT-style subword pieces into cleaner word-level units.
+
+    Why this exists:
+    - SHAP returns tokenizer pieces, not always user-facing words.
+    - UI expects readable "token-like" chunks for ranking/highlighting.
+    - We preserve contribution math by summing scores of continuation pieces.
     """
     collapsed: list[_TokenContribution] = []
     current_pieces: list[str] = []
@@ -514,8 +523,10 @@ def _collapse_subword_contributions(
         if current_pieces:
             if token_to_text:
                 try:
+                    # Prefer tokenizer-native reconstruction for language-safe spacing.
                     text = _normalize_token(str(token_to_text(current_pieces)))
                 except Exception:
+                    # Fallback keeps behavior stable if tokenizer helper is unavailable.
                     text = _normalize_token("".join(current_pieces))
             else:
                 text = _normalize_token("".join(current_pieces))

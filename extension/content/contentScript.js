@@ -114,6 +114,7 @@ function injectHighlightStyles() {
 }
 
 function setHighlightMode(mode) {
+  // Keep verdict-color mapping centralized for easier theme tweaks.
   const normalized = String(mode || "").toLowerCase();
   const color = normalized === "real" ? "#bbf7d0" : "#fecaca";
   document.documentElement.style.setProperty("--fake-sha-highlight-bg", color);
@@ -170,6 +171,7 @@ function getScopeRoot(scopeText) {
  */
 function highlightOneMatch(textNode, token) {
   const text = textNode.textContent;
+  // Match phrases even when page text has newlines/tabs between words.
   const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tokenPattern = escaped.replace(/\s+/g, "\\s+");
   const regex = new RegExp(tokenPattern, "i");

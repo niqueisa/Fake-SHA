@@ -1,5 +1,5 @@
 """
-RoBERTa inference: same AnalyzeResponse contract as SVM and mock.
+RoBERTa inference: same AnalyzeResponse contract as SVM and XLM-RoBERTa.
 
 Confidence is computed using temperature scaling over logits for realistic probabilities.
 """

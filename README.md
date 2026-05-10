@@ -100,7 +100,7 @@ See **[backend/README.md](backend/README.md)** for:
 | File | Purpose |
 |------|---------|
 | **README.md** (root) | Project overview, structure, extension setup, how to load the extension |
-| **backend/README.md** | Backend-only: API setup, Supabase, testing, replacing the mock analyzer |
+| **backend/README.md** | Backend-only: API setup, Supabase, testing, and deployment-focused analyzer config |
 
 ## Branching and Contribution Workflow
 
