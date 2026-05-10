@@ -228,7 +228,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const tokens = shapTopTokens.length > 0
           ? shapTopTokens
           : (Array.isArray(backendResult.tokens) ? backendResult.tokens : []);
-        sendHighlightTokensToPage(tabInfo.tabId, tokens, textToAnalyze);
+        const highlightMode = String(mappedData?.label || "").toUpperCase().includes("REAL")
+          ? "real"
+          : "fake";
+        sendHighlightTokensToPage(tabInfo.tabId, tokens, textToAnalyze, highlightMode);
       }
     } catch (err) {
       const message =
@@ -328,17 +331,21 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Send tokens to content script for page highlighting (when highlightTokens setting is on).
    */
-  function sendHighlightTokensToPage(tabId, tokens, scopeText = "") {
+  function sendHighlightTokensToPage(tabId, tokens, scopeText = "", mode = "fake") {
     if (tabId == null || typeof chrome === "undefined" || !chrome.tabs?.sendMessage) return;
     const tokenTexts = Array.isArray(tokens)
       ? tokens.map((t) => (typeof t === "string" ? t : t && t.text ? t.text : "")).filter(Boolean)
       : [];
     if (tokenTexts.length === 0) return;
-    chrome.tabs.sendMessage(tabId, { type: "fakeSha_highlightTokens", tokens: tokenTexts, scopeText }, () => {
-      if (chrome.runtime.lastError) {
-        // Ignore: content script may not be loaded (e.g. chrome:// page)
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "fakeSha_highlightTokens", tokens: tokenTexts, scopeText, mode },
+      () => {
+        if (chrome.runtime.lastError) {
+          // Ignore: content script may not be loaded (e.g. chrome:// page)
+        }
       }
-    });
+    );
   }
 
   /**

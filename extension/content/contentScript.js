@@ -90,7 +90,7 @@ function getPageContent() {
 // -----------------------------------------------------------------------------
 
 const HIGHLIGHT_CLASS = "fake-sha-highlight";
-const MAX_TOKENS_TO_HIGHLIGHT = 10;
+const MAX_TOKENS_TO_HIGHLIGHT = 30;
 const MIN_TOKEN_LENGTH = 2;
 let lastSelectionRange = null;
 
@@ -98,17 +98,25 @@ let lastSelectionRange = null;
  * Inject CSS for highlight styling. Idempotent.
  */
 function injectHighlightStyles() {
-  if (document.getElementById("fake-sha-highlight-styles")) return;
-  const style = document.createElement("style");
-  style.id = "fake-sha-highlight-styles";
+  let style = document.getElementById("fake-sha-highlight-styles");
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "fake-sha-highlight-styles";
+    (document.head || document.documentElement).appendChild(style);
+  }
   style.textContent = `
     .fake-sha-highlight {
-      background-color: #fef08a;
+      background-color: var(--fake-sha-highlight-bg, #fecaca);
       padding: 0 1px;
       border-radius: 2px;
     }
   `;
-  (document.head || document.documentElement).appendChild(style);
+}
+
+function setHighlightMode(mode) {
+  const normalized = String(mode || "").toLowerCase();
+  const color = normalized === "real" ? "#bbf7d0" : "#fecaca";
+  document.documentElement.style.setProperty("--fake-sha-highlight-bg", color);
 }
 
 /**
@@ -162,13 +170,17 @@ function getScopeRoot(scopeText) {
  */
 function highlightOneMatch(textNode, token) {
   const text = textNode.textContent;
-  const tokenLower = token.toLowerCase();
-  const idx = text.toLowerCase().indexOf(tokenLower);
-  if (idx === -1) return false;
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tokenPattern = escaped.replace(/\s+/g, "\\s+");
+  const regex = new RegExp(tokenPattern, "i");
+  const matchObj = text.match(regex);
+  if (!matchObj || matchObj.index == null) return false;
+  const idx = matchObj.index;
+  const matchLen = matchObj[0].length;
 
   const before = text.slice(0, idx);
-  const match = text.slice(idx, idx + token.length);
-  const after = text.slice(idx + token.length);
+  const match = text.slice(idx, idx + matchLen);
+  const after = text.slice(idx + matchLen);
 
   const parent = textNode.parentNode;
   if (!parent) return false;
@@ -230,18 +242,24 @@ function clearHighlights() {
  * Apply highlights for the given token texts.
  * Clears previous highlights first, then highlights up to MAX_TOKENS_TO_HIGHLIGHT.
  */
-function applyTokenHighlights(tokens, scopeText) {
+function applyTokenHighlights(tokens, scopeText, mode = "fake") {
   clearHighlights();
   if (!Array.isArray(tokens) || tokens.length === 0) return;
 
   injectHighlightStyles();
+  setHighlightMode(mode);
   const scopeRoot = getScopeRoot(scopeText);
 
   const tokenTexts = [];
+  const seen = new Set();
   for (const t of tokens) {
     const text = typeof t === "string" ? t : (t && t.text ? t.text : "");
     if (text && text.trim().length >= MIN_TOKEN_LENGTH) {
-      tokenTexts.push(text.trim());
+      const normalized = text.trim().toLowerCase();
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        tokenTexts.push(text.trim());
+      }
     }
     if (tokenTexts.length >= MAX_TOKENS_TO_HIGHLIGHT) break;
   }
@@ -307,7 +325,7 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage)
       }
     } else if (request.type === "fakeSha_highlightTokens") {
       try {
-        applyTokenHighlights(request.tokens || [], request.scopeText || "");
+        applyTokenHighlights(request.tokens || [], request.scopeText || "", request.mode || "fake");
         sendResponse({ ok: true });
       } catch (e) {
         sendResponse({ ok: false, error: String(e) });
