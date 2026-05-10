@@ -6,7 +6,12 @@ Confidence is computed using temperature scaling over logits for realistic proba
 
 from __future__ import annotations
 
-from core.config import shap_enabled, xlmr_inference_temperature
+from core.config import (
+    shap_enabled,
+    xlmr_confidence_calibration_strength,
+    xlmr_confidence_margin_weight,
+    xlmr_inference_temperature,
+)
 from explainability.xlmr_shap import build_shap_explanation, explanation_unavailable
 from .loader import load_bundle
 from .preprocess import build_model_input
@@ -30,6 +35,42 @@ def _label_to_verdict(model, class_index: int) -> str:
         return "REAL" if class_index == 1 else "FAKE"
 
     return "REAL"
+
+
+def _calibrate_confidence(probs_vec: torch.Tensor, pred_idx: int) -> float:
+    """
+    Calibrate confidence using margin + entropy certainty.
+
+    This widens confidence range in a controlled way:
+    - clearer predictions move slightly upward
+    - uncertain predictions move slightly downward
+    """
+    probs = probs_vec.detach().float().cpu()
+    n_classes = max(2, int(probs.numel()))
+    base = 1.0 / float(n_classes)
+    raw = float(probs[pred_idx].item())
+
+    sorted_probs, _ = torch.sort(probs, descending=True)
+    top1 = float(sorted_probs[0].item())
+    top2 = float(sorted_probs[1].item()) if n_classes > 1 else 0.0
+    margin = max(0.0, min(1.0, top1 - top2))
+
+    safe_probs = torch.clamp(probs, min=1e-12)
+    entropy = float(-(safe_probs * torch.log(safe_probs)).sum().item())
+    max_entropy = float(torch.log(torch.tensor(float(n_classes))).item())
+    entropy_norm = entropy / max_entropy if max_entropy > 0 else 0.0
+    certainty_entropy = max(0.0, min(1.0, 1.0 - entropy_norm))
+
+    margin_weight = xlmr_confidence_margin_weight()
+    certainty = (margin_weight * margin) + ((1.0 - margin_weight) * certainty_entropy)
+    target = base + ((1.0 - base) * certainty)
+
+    strength = xlmr_confidence_calibration_strength()
+    calibrated = raw + (target - raw) * strength
+
+    # Keep confidence realistic and avoid exact 0/1.
+    calibrated = max(base, min(0.99, calibrated))
+    return calibrated
 
 
 def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
@@ -59,10 +100,7 @@ def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
     # Temperature scaling (important for your overconfidence issue)
     pred_idx = int(torch.argmax(probs_vec).item())
     verdict = _label_to_verdict(model, pred_idx)
-    confidence = float(probs_vec[pred_idx].item())
-
-    # Clamp confidence (avoid unrealistic 0 / 1)
-    confidence = max(0.01, min(0.99, confidence))
+    confidence = _calibrate_confidence(probs_vec, pred_idx)
 
     # Legacy top-level `indicators` is kept for API compatibility only.
     # Real explainability indicators are returned in `explanation.indicators`.

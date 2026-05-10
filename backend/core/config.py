@@ -54,12 +54,39 @@ def xlmr_inference_temperature() -> float:
 
     Used by both inference and SHAP wrapper so explanations align with displayed confidence.
     """
-    raw = os.environ.get("FAKE_SHA_XLMR_TEMPERATURE", "10.0").strip()
+    raw = os.environ.get("FAKE_SHA_XLMR_TEMPERATURE", "3.5").strip()
     try:
         t = float(raw)
         return max(0.1, min(100.0, t))
     except ValueError:
-        return 10.0
+        return 3.5
+
+
+def xlmr_confidence_calibration_strength() -> float:
+    """
+    Blend strength for post-softmax confidence calibration.
+
+    0.0 -> keep raw softmax confidence
+    1.0 -> fully use calibrated confidence target
+    """
+    raw = os.environ.get("FAKE_SHA_XLMR_CONF_CAL_STRENGTH", "0.55").strip()
+    try:
+        value = float(raw)
+        return max(0.0, min(1.0, value))
+    except ValueError:
+        return 0.55
+
+
+def xlmr_confidence_margin_weight() -> float:
+    """
+    Weight of top-2 probability margin in confidence certainty score.
+    """
+    raw = os.environ.get("FAKE_SHA_XLMR_CONF_MARGIN_WEIGHT", "0.6").strip()
+    try:
+        value = float(raw)
+        return max(0.0, min(1.0, value))
+    except ValueError:
+        return 0.6
 
 # Must match AnalyzeRequest.analyzer Literal and inference.factory branches.
 VALID_ANALYZER_BACKENDS: frozenset[str] = frozenset(
