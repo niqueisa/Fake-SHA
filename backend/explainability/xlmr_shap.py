@@ -86,6 +86,51 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "sumabog ang damdamin", "nanlumo", "nakakapanikot ng ulo",
         "dismayado", "dismaya", "nakakadismaya", "napapamura",
         "nakakagulat talaga", "sakit sa ulo", "nakaka frustrate",
+        "toxic", "nasty", "vile", "vicious", "bitter", "spiteful", "sarcastic",
+        "sarcasm", "derogatory", "disparaging", "vilify", "smear", "slur",
+        "obscene", "vulgar", "profanity", "cursing", "curse", "filthy",
+        "moron", "idiot", "stupid", "dumb", "pathetic", "loser", "scumbag",
+        "jerk", "worthless", "useless", "freak", "weirdo", "dirtbag",
+        "despicable", "revolting", "foul mouthed", "trashy", "trash talk",
+        "burn", "burned", "roasted", "owning", "clowned", "pathetic loser",
+        "gago", "gaga", "ulol", "leche", "punyeta", "piste", "yawa",
+        "yawa ka", "kupal", "pakshet", "pucha", "puta", "pota",
+        "tang ina", "tangina", "taena", "putang", "putangina",
+        "tangina mo", "putang ina mo", "pakyo", "pakyu", "fk", "fvck",
+        "bobo", "boba", "tanga", "engot", "gunggong", "tarantado",
+        "inutil", "bubo", "bubo ka", "gungong", "tarantadu",
+        "walang silbi", "walang kwenta", "walang modo", "walang hiya",
+        "walang respeto", "bastos", "salbahe", "mapang api",
+        "mapanglait", "manlait", "pambabastos", "mang insulto", "insultuhin",
+        "mang asar", "asar", "nakakaasar", "nakakabwisit na", "nakakaburat",
+        "mema", "mema lang", "satsat", "puro dakdak", "clout", "clout chaser",
+        "epal", "sipsip", "trapo", "trapong", "buwaya", "mangongotong",
+        "sinungaling", "sinungaling ka", "mang sinungaling", "mandaraya",
+        "manloloko", "budol", "budolero", "budol king", "plastik", "peke",
+        "doble kara", "dobleng mukha", "balimbing", "balimbingan",
+        "taksil", "traydor", "taksil ka", "hunyango", "manggagamit",
+        "mapanlinlang", "linlang", "niloloko", "niloko", "garapal",
+        "walang konsensya", "evil", "masamang tao", "masamang loob",
+        "demons", "demonyo", "demonsyo", "satanas", "impyerno",
+        "hayop", "hayop ka", "animal", "animal ka", "mga hayop",
+        "aso", "baboy", "baboy ka", "daga", "halimaw", "linta",
+        "sipsip na linta", "pusit", "pusit ka", "squid", "reptile",
+        "reptilya", "basura", "basurang tao", "basurang pulitiko",
+        "adik", "adek", "adek boy", "drug adik", "shabu", "shabs",
+        "bangag", "bangag ka", "high ka", "lasing", "lasheng", "stoned",
+        "basag", "lutang", "lutang ka", "coke head", "sniffer",
+        "patayin", "papapatay", "papatayin", "saksakin", "suntukin",
+        "bugbugin", "sampalin", "barilin", "sunugin", "itumba", "itumba mo",
+        "ibitay", "bitayin", "pugutan", "balatan", "wasakin",
+        "dutae", "dugyot", "dugyot ka", "dilawan", "pinklawan",
+        "kakampink", "yellowtard", "dds", "ddsz", "apologist",
+        "bayarang", "bayaran", "paid troll", "trolls", "troll farm",
+        "junjun", "magnanakaw", "magnanakaw ka", "dictator",
+        "diktador", "oppressor", "salot", "sumpa",
+        "kanser", "kanser sa lipunan", "balakid", "panggulo",
+        "demonyo ng", "halimaw na", "abomination", "disgrace",
+        "kakahiyan", "nakakahiya ka", "shame on you", "how dare",
+        "kupal ka", "bobo mo", "tanga mo",
     ],
     "Claim Certainty": [
         "confirmed", "confirm", "proven", "proved", "proof", "definitely",
@@ -123,6 +168,37 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "hindi pa kumpirmado", "unverified", "di verified",
         "parang totoo", "mukhang totoo", "mukhang fake",
         "baka naman", "pwede rin", "posibleng totoo", "hindi sigurado",
+        "syempre", "syempre naman", "obvious", "obvious naman",
+        "plainly", "plain as day", "no brainer", "case closed",
+        "periodt", "period", "tapos ang usapan", "tapos na ang usapan",
+        "wala nang debate", "ayaw na mag debate", "open and shut",
+        "irrefutable", "irrefutably", "indisputable", "indisputably",
+        "unequivocal", "unequivocally", "unquestionable", "unquestionably",
+        "absolutely", "absolutely true", "absolutely false", "categorically",
+        "categorically false", "categorically true", "patently false",
+        "patently fake", "blatant lie", "bare faced lie", "big lie",
+        "hoax", "bogus", "sham", "fraud", "fraudulent", "fabricated",
+        "fabrication", "made up", "invented story", "false narrative",
+        "disinformation", "misinformation", "malicious lie", "sinungaling",
+        "sinungaling talaga", "sinungaling sila", "propaganda",
+        "black propaganda", "fake news yarn", "fake news talaga",
+        "legit na peke", "peke talaga", "to naman", "totoo naman",
+        "hindi mapagdudahan", "di na mapagdudahan", "walang pagdududa",
+        "di na pinagtatalunan", "hindi na pinagtatalunan", "final answer",
+        "final na", "tapos na", "solved na", "klarong klaro",
+        "linaw na linaw", "panigurado", "sigurado yun", "sigurado ako",
+        "sure ako", "ako sure", "hindi ako nagkakamali",
+        "hindi ako nagkakamali dito", "imposibleng hindi", "imposibleng oo",
+        "truth bomb", "hard truth", "capital t truth",
+        "undeniable truth", "gospel truth", "word for word",
+        "verbatim", "as a matter of fact", "matter of fact",
+        "in reality", "in fact", "fact of the matter", "bottom line",
+        "truth is", "reality check", "get real",
+        "hindi makatotohanan", "hindi tugma sa datos", "fake account",
+        "di verified", "hindi validated", "unvalidated claim",
+        "unsupported claim", "baseless accusation",
+        "walang batayan", "walang pundasyon", "hindi credible",
+        "walang credibility", "discredited na", "debunk na",
     ],
     "Presence of Evidence-related Language": [
         "evidence", "proof", "data", "record", "records", "document",
@@ -165,6 +241,34 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "satellite image", "geotag", "metadata", "source code",
         "open data", "foi", "freedom of information", "foi request",
         "official gazette", "gazette", "government data",
+        "screenshot", "screenshots", "screencap", "screen cap", "screencapture",
+        "screengrab", "screen grab", "photo evidence", "larawan ng ebidensya",
+        "cctv", "cctv footage", "body cam", "bodycam", "dashcam", "dash cam",
+        "audio leak", "leaked audio", "audio recording", "voice recording",
+        "video evidence", "video bilang patunay", "raw footage", "uncut video",
+        "metadata", "exif", "timestamp", "time stamp", "digital trail",
+        "paper trail", "chain of custody", "evidence bag", "exhibit a",
+        "exhibit b", "annex", "attachment", "attachments", "hyperlink",
+        "permalink", "archived link", "wayback", "wayback machine",
+        "primary source", "secondary source", "firsthand", "first hand",
+        "eyewitness", "eye witness", "witness account", "witness statement",
+        "sworn testimony", "under oath", "sinumpaang salaysay",
+        "corroborate", "corroborates", "corroborated", "corroboration",
+        "disprove", "disproves", "disproved", "invalidates", "invalidated",
+        "forensic report", "autopsy", "ballistics", "dna", "dna test",
+        "fingerprint", "tally sheet", "precinct count", "election data",
+        "recount", "audit trail", "log file", "server logs", "ip logs",
+        "geotagged", "geolocation", "triangulated", "triangulation",
+        "ebidensyang", "mga ebidensya", "resibong", "may resibo",
+        "may patunay", "may katibayan", "may dokumento", "may rekord",
+        "walang ebidensya", "walang patunay", "walang proweba",
+        "walang katibayan", "walang dokumento", "walang resibo",
+        "hindi napatunayan", "hindi napatotohanan", "hindi beripikado",
+        "hindi supported ng datos", "walang basehang datos",
+        "base sa datos", "base sa ebidensya", "sinusuportahan ng datos",
+        "pinapatunayan ng", "nagpapakita ng patunay",
+        "redacted document", "unredacted", "leaked docs", "leaked memo",
+        "internal memo", "confidential memo", "classified", "declassified",
     ],
     "Textual Source Attribution Mentions": [
         "said", "says", "stated", "announced", "according", "according to",
@@ -218,6 +322,32 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "sinabi ni", "sabi ni", "sabi ng", "pahayag ni", "pahayag ng",
         "inihayag", "inihayag ni", "inihayag ng",
         "iniulat ni", "iniulat ng", "ayon sa kanya", "ayon sa kanila",
+        "quotes", "quoted", "quoting", "cites", "cited", "citation",
+        "writes", "wrote", "author", "byline", "columnist",
+        "per source", "unnamed source", "anonymous source", "insider",
+        "whistleblower", "leaked by", "obtained by", "exclusive to",
+        "speaks on condition", "on background", "on the record",
+        "off the record", "statement from", "released by",
+        "marcos", "marcos jr", "bbm", "pbbm", "bongbong", "imee",
+        "duterte", "sara", "inday sara", "rodrigo", "bato", "bato dela rosa",
+        "leni", "robredo", "kiko", "pangilinan", "isko", "moreno",
+        "trillanes", "de lima", "leila", "zubiri", "escudero", "chiz",
+        "cayetano", "mikey", "villar", "mark villar", "manny villar",
+        "diokno", "chel diokno", "kiko pangilinan", "poe", "grace poe",
+        "hontiveros", "risa", "lapid", "lito lapid", "revilla", "bong revilla",
+        "enrile", "juan ponce", "gonzaga", "toni", "kuya wil", "vice ganda",
+        "philippine star", "the philippine star", "bulletin online",
+        "journal online ph", "standard", "daily tribune",
+        "manila standard", "business mirror", "malaya business insight",
+        "daily tribune online", "tribune.net", "bworld online",
+        "altermidya", "bulatlat", "kodao", "pinoyweekly",
+        "bilyonaryo", "get real philippines", "showbiz insider",
+        "sonshine", "smni", "net 25", "net25",
+        "dzxl", "dwsb", "super radyo", "tele radyo", "bombo radyo nationwide",
+        "comelec commissioner", "poll body", "namfrel volunteer",
+        "watchdog group", "civil society", "ngo", "international observers",
+        "commission on human rights", "chr",
+        "kontra daya", "legal network", "ibp", "integrated bar",
     ],
     "Sensationalism": [
         "viral", "shocking", "shock", "exposed", "expose", "unbelievable",
@@ -258,6 +388,35 @@ _INDICATOR_KEYWORDS: dict[str, list[str]] = {
         "kakaiba", "sarap panuorin", "grabe ang nangyari", "sumabog sa internet",
         "pinag uusapan", "usap usapan ngayon", "kumatok sa social media",
         "viral ngayon", "nag viral", "nag-viral",
+        "plot twist", "mega plot twist", "twist ending", "blowing up",
+        "blew up online", "social media erupted", "internet meltdown",
+        "firestorm", "media frenzy", "feeding frenzy", "chaos online",
+        "went nuts", "losing their minds", "cannot believe", "unsee",
+        "watch before deleted", "before it gets deleted", "takedown",
+        "restored footage", "leaked tape", "alleged video",
+        "blind item", "blind items", "chismis", "tsismis", "tea", "spill the tea",
+        "bardagulan", "savage", "savage af", "clapback", "clap back",
+        "ratio", "ratioed", "owns", "owned", "destroyed him", "destroyed her",
+        "mic drop", "karma", "instant karma", "served", "justice served",
+        "you wont see this", "never before seen", "first time leak",
+        "limited time", "act now", "last chance", "do not scroll",
+        "stop scrolling", "wait for it", "wait till the end", "ending tho",
+        "pilipinas trending", "trending sa pilipinas", "pilipinas talk",
+        "number 1 trending", "top trending topic", "trendlist",
+        "usap-usapan ng bayan", "pinag uusapan ng bayan",
+        "usap-usapan ngayon", "pinaguusapan ng lahat",
+        "nagliyab ang komento", "sumabog ang comment section",
+        "nagulantang ang netizens", "nagulantang mga netizens",
+        "kumatok ang balita", "pumatok ang post",
+        "kumakalat sa facebook", "kumakalat sa tiktok", "tiktok trending",
+        "facebook viral", "nagpapakulo", "mainit na isyu",
+        "wag kalimutan panoorin", "wag palampasin", "wag palampasin to",
+        "huling parte", "huling bahagi", "part 3", "to be continued",
+        "abangan susunod", "abangan mamaya",
+        "hindi ako makapaniwala grabe", "grabe ang trending",
+        "viral-worthy", "viral worthy", "click worthy", "clout chasing",
+        "for the views", "for engagement", "bait engagement",
+        "outrage bait", "rage bait", "ragebait",
     ],
 }
 
@@ -311,6 +470,89 @@ def _normalize_token(raw: str) -> str:
     # Collapse whitespace from merged pieces.
     token = re.sub(r"\s+", " ", token)
     return token
+
+
+def _readable_token_text(raw: str) -> str:
+    """
+    Improve readability for glued token strings from subword/tokenizer artifacts.
+    """
+    text = _normalize_token(raw)
+    if not text or " " in text:
+        return text
+
+    # Break URL-like concatenations.
+    text = re.sub(r"(?i)(https?)(?=[A-Za-z0-9])", r" \1", text).strip()
+    text = re.sub(r"(?i)(www)(?=[A-Za-z0-9])", r" \1", text).strip()
+
+    # Split CamelCase boundaries.
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+
+    # Add boundaries between numbers and letters when tokenizer output glues them.
+    text = re.sub(r"(?<=[0-9])(?=[A-Za-z])", " ", text)
+    text = re.sub(r"(?<=[A-Za-z])(?=[0-9])", " ", text)
+
+    # Light cleanup for occasional repeated whitespace.
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _collapse_subword_contributions(
+    raw_tokens: list[Any],
+    raw_scores: np.ndarray,
+    *,
+    token_to_text: Any | None = None,
+) -> list[_TokenContribution]:
+    """
+    Collapse contiguous XLM-R/GPT-style subword pieces into cleaner word-level units.
+    """
+    collapsed: list[_TokenContribution] = []
+    current_pieces: list[str] = []
+    current_score = 0.0
+
+    def _flush_current() -> None:
+        nonlocal current_pieces, current_score
+        if current_pieces:
+            if token_to_text:
+                try:
+                    text = _normalize_token(str(token_to_text(current_pieces)))
+                except Exception:
+                    text = _normalize_token("".join(current_pieces))
+            else:
+                text = _normalize_token("".join(current_pieces))
+            collapsed.append(_TokenContribution(text=text, score=current_score))
+            current_pieces = []
+            current_score = 0.0
+
+    for raw_token, raw_score in zip(raw_tokens, raw_scores):
+        raw_text = str(raw_token or "")
+        has_leading_boundary = bool(re.match(r"^[\s▁Ġ]+", raw_text))
+        piece = _normalize_token(raw_text)
+        if not piece:
+            _flush_current()
+            continue
+
+        starts_new_word = (
+            raw_text.startswith("▁")
+            or raw_text.startswith("Ġ")
+            or has_leading_boundary
+        )
+        piece_is_punct = bool(_PUNCT_RE.match(piece))
+
+        if piece_is_punct:
+            _flush_current()
+            continue
+
+        if starts_new_word or not current_pieces:
+            _flush_current()
+            current_pieces = [raw_text]
+            current_score = float(raw_score)
+        else:
+            # No leading word-boundary marker means this is a continuation piece.
+            current_pieces.append(raw_text)
+            current_score += float(raw_score)
+
+    _flush_current()
+    return collapsed
 
 
 def _normalize_match_text(raw: str) -> str:
@@ -457,11 +699,18 @@ def build_shap_explanation(
     raw_scores = _extract_class_values(shap_values.values, predicted_class_index)
 
     merged_scores: dict[str, float] = {}
-    for raw_token, raw_score in zip(raw_tokens, raw_scores):
-        token = _normalize_token(str(raw_token))
+    token_to_text = getattr(getattr(explainer, "masker", None), "tokenizer", None)
+    convert_tokens_to_string = getattr(token_to_text, "convert_tokens_to_string", None)
+    collapsed_tokens = _collapse_subword_contributions(
+        raw_tokens,
+        raw_scores,
+        token_to_text=convert_tokens_to_string if callable(convert_tokens_to_string) else None,
+    )
+    for item in collapsed_tokens:
+        token = _readable_token_text(item.text)
         if not _is_useful_token(token):
             continue
-        merged_scores[token] = merged_scores.get(token, 0.0) + float(raw_score)
+        merged_scores[token] = merged_scores.get(token, 0.0) + float(item.score)
 
     ranked = sorted(
         (_TokenContribution(text=t, score=s) for t, s in merged_scores.items()),
