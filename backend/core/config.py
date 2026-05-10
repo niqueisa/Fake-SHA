@@ -2,7 +2,7 @@
 Backend configuration (paths, analyzer selection).
 
 Environment:
-    FAKE_SHA_ANALYZER  - "svm" (default), "roberta", "xlmr", or "mock"
+    FAKE_SHA_ANALYZER  - "svm" (default), "roberta", or "xlmr"
     FAKE_SHA_XLMR_ARTIFACT_DIR - optional override for XLM-R model directory
     FAKE_SHA_XLMR_MODEL        - alias for FAKE_SHA_XLMR_ARTIFACT_DIR (backward compatibility)
     FAKE_SHA_XLMR_TEMPERATURE  - softmax temperature for XLM-R logits (confidence + SHAP wrapper)
@@ -90,7 +90,7 @@ def xlmr_confidence_margin_weight() -> float:
 
 # Must match AnalyzeRequest.analyzer Literal and inference.factory branches.
 VALID_ANALYZER_BACKENDS: frozenset[str] = frozenset(
-    {"svm", "roberta", "xlmr", "mock"}
+    {"svm", "roberta", "xlmr"}
 )
 
 

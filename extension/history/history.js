@@ -107,6 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
         topTokens: Array.isArray(item.topTokens) ? item.topTokens : [],
       };
     }
+    // Legacy fallback: rebuild minimal shape for older stored records.
     const confNum = parseFloat(String(item.confidence || "0").replace("%", "")) || 0;
     const indNames = Array.isArray(item.indicators) ? item.indicators : [];
     const indicators = indNames.map((name, i) => ({
@@ -313,6 +314,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const selectedIndicator = activeIndicatorIdx == null ? null : data.indicators?.[activeIndicatorIdx];
       const tokenSet = new Set((selectedIndicator?.tokens || []).map((s) => encodeURIComponent(String(s).toLowerCase())));
 
+      // Apply both indicator filter and "show more" pagination in one pass.
       let visibleCounter = 0;
       rows.forEach((row) => {
         const token = row.getAttribute("data-token") || "";
@@ -469,6 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       if (storage) {
         storage.get(HISTORY_KEY, (result) => {
+          // Keep all records in memory so search stays instant client-side.
           allRecords = result && Array.isArray(result[HISTORY_KEY]) ? result[HISTORY_KEY] : [];
           applySearchAndRender();
         });

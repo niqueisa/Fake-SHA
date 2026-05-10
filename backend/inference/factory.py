@@ -1,5 +1,5 @@
 """
-Selects the active analyzer implementation (SVM, RoBERTa, XLM-RoBERTa, or mock)
+Selects the active analyzer implementation (SVM, RoBERTa, or XLM-RoBERTa)
 without changing routes.
 """
 
@@ -19,7 +19,8 @@ def analyze_text(
     url: str = "",
     analyzer: str | None = None,
 ) -> AnalyzeResponse:
-    """If ``analyzer`` is set (svm | roberta | xlmr | mock), it overrides FAKE_SHA_ANALYZER."""
+    """If ``analyzer`` is set (svm | roberta | xlmr), it overrides FAKE_SHA_ANALYZER."""
+    # Request-level override takes priority so frontend can switch analyzers per call.
     backend = analyzer.strip().lower() if analyzer else get_analyzer_backend()
 
     if backend not in VALID_ANALYZER_BACKENDS:
@@ -29,11 +30,8 @@ def analyze_text(
             "(request field `analyzer` or environment variable FAKE_SHA_ANALYZER)."
         )
 
-    if backend == "mock":
-        from inference.mock.analyzer import analyze_text as _analyze
-        return _analyze(text, title, url)
-
     if backend == "roberta":
+        # Lazy imports keep startup lightweight and avoid importing unused model stacks.
         from inference.roberta.analyzer import analyze_text as _analyze
         return _analyze(text, title, url)
 
@@ -41,5 +39,6 @@ def analyze_text(
         from inference.xlmr.analyzer import analyze_text as _analyze
         return _analyze(text, title, url)
 
+    # Default fallback remains SVM for backwards compatibility.
     from inference.svm.analyzer import analyze_text as _analyze
     return _analyze(text, title, url)

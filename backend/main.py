@@ -2,7 +2,7 @@
 FAKE-SHA Backend - FastAPI Application
 
 REST API for fake news detection. Analysis is delegated to `inference/`
-(SVM, RoBERTa, XLM-RoBERTa, or mock).
+(SVM, RoBERTa, or XLM-RoBERTa).
 """
 
 from dotenv import load_dotenv
@@ -86,9 +86,10 @@ def health():
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest):
     """
-    Analyzer: svm | roberta | xlmr | mock
+    Analyzer: svm | roberta | xlmr
     """
 
+    # Inference path (svm/roberta/xlmr) is selected by request.analyzer or env default.
     result = analyze_text(
         text=request.text,
         title=request.title,
@@ -96,6 +97,7 @@ def analyze(request: AnalyzeRequest):
         analyzer=request.analyzer,
     )
 
+    # Persistence is best-effort and intentionally does not block API response.
     save_analysis_record(
         title=request.title,
         url=request.url,
@@ -108,4 +110,5 @@ def analyze(request: AnalyzeRequest):
         extraction_source=None,
     )
 
+    # Return normalized Pydantic payload consumed by extension popup/history UIs.
     return result.model_dump()

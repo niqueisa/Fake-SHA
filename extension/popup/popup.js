@@ -437,6 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const note = typeof explanation?.note === "string"
       ? explanation.note
       : "SHAP values indicate feature contribution and do not verify factual correctness.";
+    // Keep summary deterministic so history snapshots remain comparable across sessions.
     const summary = `The model classified this article as ${isFake ? "FAKE" : "REAL"} with ${Math.min(100, Math.max(0, confidencePct)).toFixed(1)}% confidence. `
       + "The explanation below shows which textual patterns contributed most to the prediction. "
       + note;
@@ -972,6 +973,7 @@ document.addEventListener("DOMContentLoaded", () => {
           : parseFloat(String(resultData.confidence || "0").replace("%", "")) || 0;
 
       const now = new Date();
+      // Persist fully-rendered UI fields so History view can render without recomputing.
       const record = {
         id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
         articleTitle: resultData.articleTitle || "Untitled",

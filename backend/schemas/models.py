@@ -25,7 +25,7 @@ class AnalyzeRequest(BaseModel):
         default="selection_only",
         description="Analysis mode: 'selection_only' or 'selection_fallback'",
     )
-    analyzer: Literal["svm", "roberta", "xlmr", "mock"] | None = Field(
+    analyzer: Literal["svm", "roberta", "xlmr"] | None = Field(
         default=None,
         description=(
             "Which backend to use for this request. "
