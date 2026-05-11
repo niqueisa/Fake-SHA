@@ -383,7 +383,45 @@ def main() -> None:
 
     test_preds = trainer.predict(test_ds)
     pred_ids = np.argmax(test_preds.predictions, axis=-1)
+
+    # Print detailed classification report
     _print_split_report("Test", test_labels, pred_ids)
+
+    # =========================
+    # Confusion Matrix
+    # =========================
+    from sklearn.metrics import confusion_matrix
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    # Generate confusion matrix
+    cm = confusion_matrix(test_labels, pred_ids)
+
+    # Plot confusion matrix
+    plt.figure(figsize=(6, 5))
+
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=["FAKE", "REAL"],
+        yticklabels=["FAKE", "REAL"]
+    )
+
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Confusion Matrix of XLM-RoBERTa")
+
+    # Save image
+    plt.savefig(
+        "xlmr_confusion_matrix.png",
+        dpi=300,
+        bbox_inches='tight'
+    )
+
+    # Show figure
+    plt.show()
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     print(f"\nSaving model + tokenizer to {args.output_dir}")

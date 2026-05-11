@@ -389,6 +389,49 @@ def main() -> None:
         threshold=tuned_threshold,
     )
 
+    # =========================
+    # SVM Confusion Matrix
+    # =========================
+    from sklearn.metrics import confusion_matrix
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+
+    # Transform test data
+    X_test = vectorizer.transform(test_texts)
+
+    # Predict using tuned threshold
+    scores = model.decision_function(X_test)
+    preds = (scores >= tuned_threshold).astype(int)
+
+    # Generate confusion matrix
+    cm = confusion_matrix(test_labels, preds)
+
+    # Plot confusion matrix
+    plt.figure(figsize=(6,5))
+
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=["FAKE", "REAL"],
+        yticklabels=["FAKE", "REAL"]
+    )
+
+    plt.xlabel("Predicted Label")
+    plt.ylabel("True Label")
+    plt.title("Confusion Matrix of SVM")
+
+    # Save image
+    plt.savefig(
+        "svm_confusion_matrix.png",
+        dpi=300,
+        bbox_inches='tight'
+    )
+
+    # Show figure
+    plt.show()
+
     backend_dir = Path(__file__).resolve().parent.parent
     artifacts_dir = backend_dir / "artifacts" / "svm"
     artifacts_dir.mkdir(parents=True, exist_ok=True)
