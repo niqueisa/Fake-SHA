@@ -10,9 +10,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnSearchHistory = document.getElementById("btnSearchHistory");
 
   const HISTORY_KEY = "fakeShaHistory";
+  const HISTORY_UI_KEY = "fakeShaHistoryUi";
+  const popupMain = document.querySelector(".popup-main");
 
   // Store full records for client-side search (avoids re-fetching on each keystroke)
   let allRecords = [];
+  let currentDetailId = null;
 
   function getStorage() {
     try {
@@ -32,6 +35,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
+  }
+
+  function confidenceToPercent(value) {
+    const n =
+      typeof value === "number"
+        ? value
+        : parseFloat(String(value || "0").replace("%", "")) || 0;
+    if (n > 0 && n <= 1) {
+      return Math.round(n * 100);
+    }
+    return Math.round(Math.min(100, Math.max(0, n)));
+  }
+
+  function formatConfidencePercent(value) {
+    return `${confidenceToPercent(value)}%`;
   }
 
   function formatSigned(n) {
@@ -99,7 +117,9 @@ document.addEventListener("DOMContentLoaded", () => {
         articleTitle: item.articleTitle || item.title || "Untitled",
         sourceUrl: item.sourceUrl || "",
         label: item.label || (item.isFake ? "FAKE NEWS DETECTED" : "REAL NEWS DETECTED"),
-        confidence: typeof item.confidenceNum === "number" ? item.confidenceNum : parseFloat(String(item.confidence || "0").replace("%", "")) || 0,
+        confidence: confidenceToPercent(
+          typeof item.confidenceNum === "number" ? item.confidenceNum : item.confidence
+        ),
         indicators: item.indicators,
         summary: item.summary || item.explanation || "No summary available.",
         topTokensTitle: item.topTokensTitle || "Key tokens",
@@ -108,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
     }
     // Legacy fallback: rebuild minimal shape for older stored records.
-    const confNum = parseFloat(String(item.confidence || "0").replace("%", "")) || 0;
+    const confNum = confidenceToPercent(item.confidence);
     const indNames = Array.isArray(item.indicators) ? item.indicators : [];
     const indicators = indNames.map((name, i) => ({
       name: typeof name === "string" ? name : "Indicator",
@@ -211,7 +231,7 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .join(" ");
 
-    const confidenceVal = typeof data.confidence === "number" ? data.confidence : parseFloat(String(data.confidence || "0").replace("%", "")) || 0;
+    const confidenceVal = confidenceToPercent(data.confidence);
 
     const tokensSection = tokens.length
       ? `
@@ -252,7 +272,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="min-w-0">
             <div class="text-sm font-extrabold tracking-wide" style="color:${theme.bannerText};">${escapeHtml(data.label)}</div>
-            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${confidenceVal.toFixed(1)}%</span></div>
+            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${formatConfidencePercent(confidenceVal)}</span></div>
           </div>
         </div>
 
@@ -279,26 +299,59 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="mt-2 text-sm text-[#1e2c3e] leading-relaxed">${escapeHtml(data.summary)}</div>
         </div>
 
-        <div class="mt-4 text-sm text-gray-400 italic">What does the indicators mean?</div>
+        ${buildIndicatorGlossarySection(data)}
       </section>
     `;
   }
 
+  function buildIndicatorGlossarySection(data) {
+    const detectedNames = (data?.indicators || []).map((ind) => ind?.name).filter(Boolean);
+    if (window.FakeShaIndicatorGlossary?.buildIndicatorGlossaryHtml) {
+      return window.FakeShaIndicatorGlossary.buildIndicatorGlossaryHtml({ detectedNames });
+    }
+    return `
+      <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div class="text-sm font-semibold text-[#1e2c3e]">What do the indicators mean?</div>
+        <p class="mt-1 text-xs text-gray-600 leading-relaxed">
+          Indicators group SHAP token contributions into readable categories.
+        </p>
+      </div>
+    `;
+  }
+
+  function saveHistoryUiState() {
+    if (!window.FakeShaNav) return;
+    const inDetail = detailPanel && !detailPanel.classList.contains("hidden");
+    window.FakeShaNav.savePageUiState(HISTORY_UI_KEY, {
+      view: inDetail ? "detail" : "list",
+      recordId: currentDetailId,
+      searchQuery: searchHistoryInput ? searchHistoryInput.value : "",
+      scrollTop: popupMain ? popupMain.scrollTop : 0,
+    });
+  }
+
   function showListView() {
+    currentDetailId = null;
     if (historyListView) historyListView.classList.remove("hidden");
     if (detailPanel) detailPanel.classList.add("hidden");
+    saveHistoryUiState();
   }
 
   function showDetailView() {
     if (historyListView) historyListView.classList.add("hidden");
     if (detailPanel) detailPanel.classList.remove("hidden");
     document.querySelector(".popup-main")?.scrollTo({ top: 0, behavior: "auto" });
+    saveHistoryUiState();
   }
 
   function showDetails(item) {
+    currentDetailId = item && item.id ? item.id : null;
     const data = normalizeRecord(item);
     if (detailContent) detailContent.innerHTML = renderResultDetail(data);
     setupDetailTokenInteractions(data);
+    if (window.FakeShaIndicatorGlossary?.setupIndicatorGlossaryToggle) {
+      window.FakeShaIndicatorGlossary.setupIndicatorGlossaryToggle(detailContent);
+    }
     showDetailView();
   }
 
@@ -406,10 +459,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isFake = label.includes("FAKE");
         const verdict = raw.verdict || (isFake ? "Fake News" : "Real News");
 
-        const confidenceNum =
-          typeof raw.confidence === "number"
-            ? raw.confidence
-            : parseFloat(String(raw.confidence || "0").replace("%", "")) || 0;
+        const confidenceNum = confidenceToPercent(raw.confidence);
 
         const title = raw.articleTitle || raw.title || "Untitled";
 
@@ -430,7 +480,7 @@ document.addEventListener("DOMContentLoaded", () => {
           ? "M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
           : "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z";
 
-        const confidenceDisplay = `${confidenceNum.toFixed(1)}%`;
+        const confidenceDisplay = formatConfidencePercent(confidenceNum);
 
         card.innerHTML = `
           <div class="flex items-start gap-3">
@@ -467,23 +517,47 @@ document.addEventListener("DOMContentLoaded", () => {
     renderRecords(filtered);
   }
 
-  function loadAndRenderHistory() {
+  function restoreHistoryUiState() {
+    if (!window.FakeShaNav) return;
+    window.FakeShaNav.loadPageUiState(HISTORY_UI_KEY, (ui) => {
+      if (!ui) return;
+      if (searchHistoryInput && typeof ui.searchQuery === "string") {
+        searchHistoryInput.value = ui.searchQuery;
+      }
+      applySearchAndRender();
+      if (ui.view === "detail" && ui.recordId) {
+        const record = allRecords.find((r) => r && r.id === ui.recordId);
+        if (record) {
+          showDetails(record);
+        }
+      }
+      if (popupMain && typeof ui.scrollTop === "number") {
+        popupMain.scrollTop = ui.scrollTop;
+      }
+    });
+  }
+
+  function loadAndRenderHistory(done) {
+    const finish = () => {
+      applySearchAndRender();
+      restoreHistoryUiState();
+      if (typeof done === "function") done();
+    };
     try {
       if (storage) {
         storage.get(HISTORY_KEY, (result) => {
-          // Keep all records in memory so search stays instant client-side.
           allRecords = result && Array.isArray(result[HISTORY_KEY]) ? result[HISTORY_KEY] : [];
-          applySearchAndRender();
+          finish();
         });
       } else {
         const raw = localStorage.getItem(HISTORY_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
         allRecords = Array.isArray(parsed) ? parsed : [];
-        applySearchAndRender();
+        finish();
       }
     } catch (e) {
       allRecords = [];
-      applySearchAndRender();
+      finish();
     }
   }
 
@@ -492,14 +566,24 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   btnBack.addEventListener("click", () => {
-    window.location.href = "../popup/popup.html";
+    if (window.FakeShaNav) {
+      window.FakeShaNav.navigateTo("popup/popup.html");
+    } else {
+      window.location.href = "../popup/popup.html";
+    }
   });
 
   if (btnOpenSettings) {
     btnOpenSettings.addEventListener("click", () => {
-      window.location.href = "../settings/settings.html";
+      if (window.FakeShaNav) {
+        window.FakeShaNav.navigateTo("settings/settings.html");
+      } else {
+        window.location.href = "../settings/settings.html";
+      }
     });
   }
+
+  window.addEventListener("pagehide", saveHistoryUiState);
 
   // Search: filter on input and on button click
   if (searchHistoryInput) {

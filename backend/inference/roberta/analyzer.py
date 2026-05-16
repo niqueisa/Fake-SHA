@@ -7,7 +7,7 @@ Confidence is computed using temperature scaling over logits for realistic proba
 from __future__ import annotations
 
 from .loader import load_bundle
-from .preprocess import build_model_input
+from core.model_input import inference_input_text
 from schemas.models import AnalyzeResponse
 import torch
 import math
@@ -29,14 +29,19 @@ def _label_to_verdict(model, class_index: int) -> str:
     return "REAL"
 
 
-def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
+def analyze_text(
+    text: str,
+    title: str = "",
+    url: str = "",
+    mode: str = "selection_only",
+) -> AnalyzeResponse:
     """
     Run RoBERTa classification; returns verdict, confidence, summary, indicators, tokens.
 
     Confidence uses temperature scaling to produce more realistic probabilities.
     Tokens are left empty until SHAP integration (schema uses TokenResult).
     """
-    combined = build_model_input(text, title=title, url=url)
+    combined = inference_input_text(text, title=title, url=url, mode=mode)
     if not combined.strip():
         return AnalyzeResponse(
             verdict="REAL",

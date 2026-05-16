@@ -17,6 +17,7 @@ def analyze_text(
     text: str,
     title: str = "",
     url: str = "",
+    mode: str = "selection_only",
     analyzer: str | None = None,
 ) -> AnalyzeResponse:
     """If ``analyzer`` is set (svm | roberta | xlmr), it overrides FAKE_SHA_ANALYZER."""
@@ -33,12 +34,12 @@ def analyze_text(
     if backend == "roberta":
         # Lazy imports keep startup lightweight and avoid importing unused model stacks.
         from inference.roberta.analyzer import analyze_text as _analyze
-        return _analyze(text, title, url)
+        return _analyze(text, title, url, mode)
 
     if backend == "xlmr":
         from inference.xlmr.analyzer import analyze_text as _analyze
-        return _analyze(text, title, url)
+        return _analyze(text, title, url, mode)
 
     # Default fallback remains SVM for backwards compatibility.
     from inference.svm.analyzer import analyze_text as _analyze
-    return _analyze(text, title, url)
+    return _analyze(text, title, url, mode)

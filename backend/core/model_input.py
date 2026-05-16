@@ -1,8 +1,10 @@
 """
-Shared input string for all text classifiers (SVM, RoBERTa).
+Shared input strings for text classifiers (SVM, RoBERTa, XLM-R).
 
-Matches what the browser sends: title, URL, and body combined the same way at
-training and at inference so TF-IDF / transformer inputs stay aligned.
+- :func:`build_model_input` — training and batch jobs when CSV rows include
+  title / URL metadata alongside article body.
+- :func:`inference_input_text` — live ``/analyze`` requests: body / selection
+  only; page title and URL are stored for history but excluded from prediction.
 """
 
 
@@ -21,3 +23,21 @@ def build_model_input(text: str, title: str = "", url: str = "") -> str:
     if not parts:
         return ""
     return "\n\n".join(parts)
+
+
+def inference_input_text(
+    text: str,
+    title: str = "",
+    url: str = "",
+    *,
+    mode: str = "selection_only",
+) -> str:
+    """
+    Text passed to classifiers and SHAP at inference time.
+
+    Extension analysis always classifies the ``text`` field (selected passage or
+    extracted page content). ``title`` and ``url`` are ignored so tab chrome does
+    not influence verdicts or token highlights.
+    """
+    _ = title, url, mode  # reserved for API compatibility / future modes
+    return (text or "").strip()

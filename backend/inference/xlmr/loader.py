@@ -1,53 +1,30 @@
 """
-Load tokenizer and sequence-classification head from artifacts/xlmr.
+Load XLM-R tokenizer and sequence-classification head.
 
-Expected layout (Hugging Face save_pretrained):
-
-- config.json, tokenizer files, and model.safetensors or pytorch_model.bin.
-
-XLMRBundle keeps tokenizer, model, and compute device together so explainability code
-(e.g. SHAP) can reuse the same objects used at inference time.
+Source (first match wins):
+  - ``FAKE_SHA_XLMR_HUB_ID`` — Hugging Face Hub, e.g. ``your-org/fake-sha-xlmr``
+  - ``FAKE_SHA_XLMR_ARTIFACT_DIR`` / ``FAKE_SHA_XLMR_MODEL`` — local folder or Hub id
+  - ``backend/artifacts/xlmr/`` — default local layout (save_pretrained)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
-from core.config import get_xlmr_artifacts_dir
+from core.config import get_xlmr_model_ref
+from inference.transformer_loader import (
+    TransformerArtifactError,
+    TransformerBundle,
+    TransformerDependencyError,
+    cached_transformer_loader,
+)
 
+# Backward-compatible exception names for main.py handlers
+XLMRArtifactError = TransformerArtifactError
+XLMRDependencyError = TransformerDependencyError
 
-class XLMRArtifactError(RuntimeError):
-    """Raised when the artifact directory is missing files needed for inference."""
-
-
-class XLMRDependencyError(RuntimeError):
-    """Raised when torch/transformers are not installed."""
-
-
-def _require_artifacts(model_dir: Path) -> None:
-    if not model_dir.is_dir():
-        raise XLMRArtifactError(
-            f"XLM-R artifacts directory not found: {model_dir}. "
-            "Place a Hugging Face save_pretrained output under backend/artifacts/xlmr/."
-        )
-
-    if not (model_dir / "config.json").is_file():
-        raise XLMRArtifactError(
-            f"Missing config.json in {model_dir}. Export the trained model with save_pretrained()."
-        )
-
-    has_weights = (
-        (model_dir / "model.safetensors").is_file()
-        or (model_dir / "pytorch_model.bin").is_file()
-    )
-
-    if not has_weights:
-        raise XLMRArtifactError(
-            f"No model weights in {model_dir}. Expected model.safetensors or pytorch_model.bin."
-        )
+_load_cached = cached_transformer_loader(get_xlmr_model_ref, analyzer_name="XLM-R")
 
 
 @dataclass
@@ -59,34 +36,11 @@ class XLMRBundle:
     device: Any
 
 
-@lru_cache(maxsize=1)
 def load_bundle() -> XLMRBundle:
-    """
-    Load and cache tokenizer + model once per process.
-
-    Raises:
-        XLMRArtifactError: Missing or incomplete artifact tree.
-        XLMRDependencyError: torch / transformers not installed.
-    """
-    try:
-        import torch
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
-    except ImportError as e:
-        raise XLMRDependencyError(
-            "XLM-R inference requires torch and transformers. "
-            "Install with: pip install torch transformers safetensors"
-        ) from e
-
-    model_dir = get_xlmr_artifacts_dir()
-
-    _require_artifacts(model_dir)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
-    model = AutoModelForSequenceClassification.from_pretrained(str(model_dir))
-
-    model.eval()
-    model.to(device)
-
-    return XLMRBundle(tokenizer=tokenizer, model=model, device=device)
+    """Load and cache tokenizer + model once per process."""
+    bundle: TransformerBundle = _load_cached()
+    return XLMRBundle(
+        tokenizer=bundle.tokenizer,
+        model=bundle.model,
+        device=bundle.device,
+    )
