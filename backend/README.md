@@ -46,7 +46,12 @@ backend/
 |----------|---------|
 | `SUPABASE_URL`, `SUPABASE_KEY` | Optional; if set, analyses are stored in Supabase. |
 | `FAKE_SHA_ANALYZER` | `svm` (default), `roberta`, or `xlmr`. Invalid values return HTTP 400. |
-| `FAKE_SHA_XLMR_ARTIFACT_DIR` | Optional path to XLM-R `save_pretrained` folder (defaults to `backend/artifacts/xlmr`). Alias: `FAKE_SHA_XLMR_MODEL`. |
+| `FAKE_SHA_XLMR_HUB_ID` | Hugging Face repo id, e.g. `your-org/fake-sha-xlmr` (downloads via `transformers`). |
+| `FAKE_SHA_XLMR_ARTIFACT_DIR` | Local `save_pretrained` folder (defaults to `backend/artifacts/xlmr` if unset). |
+| `FAKE_SHA_XLMR_MODEL` | Alias for `ARTIFACT_DIR`, or Hub id if value looks like `org/name`. |
+| `FAKE_SHA_ROBERTA_HUB_ID` / `FAKE_SHA_ROBERTA_ARTIFACT_DIR` | Same pattern for RoBERTa. |
+| `FAKE_SHA_SVM_ARTIFACT_DIR` | Local folder with `svm_model.pkl` etc. (SVM does not load from the Hub). |
+| `HF_TOKEN` | Optional; required for private Hugging Face model repos. |
 | `FAKE_SHA_XLMR_TEMPERATURE` | Softmax temperature for XLM-R confidence and SHAP wrapper (default `3.5`). |
 | `ENABLE_SHAP` | `true`/`false` — attach SHAP `explanation` on XLM-R responses when enabled. |
 | `SHAP_MAX_WORDS`, `SHAP_TOP_K`, `SHAP_MAX_EVALS` | SHAP input budget / token cap / partition eval cap. |

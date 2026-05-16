@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import asyncio
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -83,21 +85,16 @@ def health():
     return {"status": "ok", "message": "FAKE-SHA backend is running"}
 
 
-@app.post("/analyze")
-def analyze(request: AnalyzeRequest):
-    """
-    Analyzer: svm | roberta | xlmr
-    """
-
-    # Inference path (svm/roberta/xlmr) is selected by request.analyzer or env default.
+def _analyze_request(request: AnalyzeRequest):
+    """Sync inference + persistence (runs in a worker thread for concurrency)."""
     result = analyze_text(
         text=request.text,
         title=request.title,
         url=request.url,
+        mode=request.mode,
         analyzer=request.analyzer,
     )
 
-    # Persistence is best-effort and intentionally does not block API response.
     save_analysis_record(
         title=request.title,
         url=request.url,
@@ -110,5 +107,15 @@ def analyze(request: AnalyzeRequest):
         extraction_source=None,
     )
 
-    # Return normalized Pydantic payload consumed by extension popup/history UIs.
     return result.model_dump()
+
+
+@app.post("/analyze")
+async def analyze(request: AnalyzeRequest):
+    """
+    Analyzer: svm | roberta | xlmr
+
+    Runs inference in a thread pool so concurrent requests (e.g. multiple browsers)
+    do not block each other on the event loop.
+    """
+    return await asyncio.to_thread(_analyze_request, request)

@@ -3,8 +3,11 @@ Backend configuration (paths, analyzer selection).
 
 Environment:
     FAKE_SHA_ANALYZER  - "svm" (default), "roberta", or "xlmr"
-    FAKE_SHA_XLMR_ARTIFACT_DIR - optional override for XLM-R model directory
-    FAKE_SHA_XLMR_MODEL        - alias for FAKE_SHA_XLMR_ARTIFACT_DIR (backward compatibility)
+    FAKE_SHA_XLMR_HUB_ID       - Hugging Face repo id, e.g. your-org/fake-sha-xlmr
+    FAKE_SHA_XLMR_ARTIFACT_DIR - local save_pretrained folder (optional)
+    FAKE_SHA_XLMR_MODEL        - alias for ARTIFACT_DIR, or Hub id if org/name (backward compatible)
+    FAKE_SHA_ROBERTA_HUB_ID / FAKE_SHA_ROBERTA_ARTIFACT_DIR / FAKE_SHA_ROBERTA_MODEL — same for RoBERTa
+    FAKE_SHA_SVM_ARTIFACT_DIR  - local folder with svm pickles (SVM is not loaded from the Hub)
     FAKE_SHA_XLMR_TEMPERATURE  - softmax temperature for XLM-R logits (confidence + SHAP wrapper)
 """
 
@@ -12,6 +15,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+
+from core.model_artifacts import resolve_pretrained_source
 
 # backend/ directory (parent of core/)
 BACKEND_ROOT: Path = Path(__file__).resolve().parent.parent
@@ -24,16 +29,38 @@ ARTIFACTS_ROBERTA_DIR: Path = BACKEND_ROOT / "artifacts" / "roberta"
 ARTIFACTS_XLMR_DIR: Path = BACKEND_ROOT / "artifacts" / "xlmr"
 
 
-def get_xlmr_artifacts_dir() -> Path:
-    """Resolved directory for XLM-R weights and tokenizer (env override or default)."""
-    raw = (
-        os.environ.get("FAKE_SHA_XLMR_ARTIFACT_DIR")
-        or os.environ.get("FAKE_SHA_XLMR_MODEL")
-        or ""
-    ).strip()
+def get_xlmr_model_ref() -> str:
+    """Hub repo id or local path for ``from_pretrained`` (XLM-R)."""
+    return resolve_pretrained_source(
+        hub_id=os.environ.get("FAKE_SHA_XLMR_HUB_ID"),
+        artifact_dir=os.environ.get("FAKE_SHA_XLMR_ARTIFACT_DIR"),
+        legacy_model_env=os.environ.get("FAKE_SHA_XLMR_MODEL"),
+        default_local_dir=ARTIFACTS_XLMR_DIR,
+    )
+
+
+def get_roberta_model_ref() -> str:
+    """Hub repo id or local path for ``from_pretrained`` (RoBERTa)."""
+    return resolve_pretrained_source(
+        hub_id=os.environ.get("FAKE_SHA_ROBERTA_HUB_ID"),
+        artifact_dir=os.environ.get("FAKE_SHA_ROBERTA_ARTIFACT_DIR"),
+        legacy_model_env=os.environ.get("FAKE_SHA_ROBERTA_MODEL"),
+        default_local_dir=ARTIFACTS_ROBERTA_DIR,
+    )
+
+
+def get_svm_artifacts_dir() -> Path:
+    """Local directory for SVM pickles (Hub not supported)."""
+    raw = os.environ.get("FAKE_SHA_SVM_ARTIFACT_DIR", "").strip()
     if raw:
         return Path(raw).expanduser().resolve()
-    return ARTIFACTS_XLMR_DIR.resolve()
+    return ARTIFACTS_SVM_DIR.resolve()
+
+
+def get_xlmr_artifacts_dir() -> Path:
+    """Backward-compatible local path helper; prefer ``get_xlmr_model_ref()``."""
+    ref = get_xlmr_model_ref()
+    return Path(ref).expanduser().resolve()
 
 
 def cors_allow_origins() -> list[str]:
@@ -54,12 +81,12 @@ def xlmr_inference_temperature() -> float:
 
     Used by both inference and SHAP wrapper so explanations align with displayed confidence.
     """
-    raw = os.environ.get("FAKE_SHA_XLMR_TEMPERATURE", "3.5").strip()
+    raw = os.environ.get("FAKE_SHA_XLMR_TEMPERATURE", "6.0").strip()
     try:
         t = float(raw)
         return max(0.1, min(100.0, t))
     except ValueError:
-        return 3.5
+        return 6.0
 
 
 def xlmr_confidence_calibration_strength() -> float:
@@ -69,24 +96,44 @@ def xlmr_confidence_calibration_strength() -> float:
     0.0 -> keep raw softmax confidence
     1.0 -> fully use calibrated confidence target
     """
-    raw = os.environ.get("FAKE_SHA_XLMR_CONF_CAL_STRENGTH", "0.55").strip()
+    raw = os.environ.get("FAKE_SHA_XLMR_CONF_CAL_STRENGTH", "0.9").strip()
     try:
         value = float(raw)
         return max(0.0, min(1.0, value))
     except ValueError:
-        return 0.55
+        return 0.9
 
 
 def xlmr_confidence_margin_weight() -> float:
     """
     Weight of top-2 probability margin in confidence certainty score.
     """
-    raw = os.environ.get("FAKE_SHA_XLMR_CONF_MARGIN_WEIGHT", "0.6").strip()
+    raw = os.environ.get("FAKE_SHA_XLMR_CONF_MARGIN_WEIGHT", "0.65").strip()
     try:
         value = float(raw)
         return max(0.0, min(1.0, value))
     except ValueError:
-        return 0.6
+        return 0.65
+
+
+def xlmr_confidence_floor() -> float:
+    """Minimum displayed confidence (0–1) after calibration."""
+    raw = os.environ.get("FAKE_SHA_XLMR_CONF_FLOOR", "0.52").strip()
+    try:
+        value = float(raw)
+        return max(0.5, min(0.9, value))
+    except ValueError:
+        return 0.52
+
+
+def xlmr_confidence_cap() -> float:
+    """Maximum displayed confidence (0–1) after calibration."""
+    raw = os.environ.get("FAKE_SHA_XLMR_CONF_CAP", "0.97").strip()
+    try:
+        value = float(raw)
+        return max(0.6, min(0.99, value))
+    except ValueError:
+        return 0.97
 
 # Must match AnalyzeRequest.analyzer Literal and inference.factory branches.
 VALID_ANALYZER_BACKENDS: frozenset[str] = frozenset(

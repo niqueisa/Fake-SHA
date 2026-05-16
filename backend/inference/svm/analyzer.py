@@ -15,8 +15,8 @@ from pathlib import Path
 
 import joblib
 
-from core.config import ARTIFACTS_SVM_DIR
-from core.model_input import build_model_input
+from core.config import get_svm_artifacts_dir
+from core.model_input import inference_input_text
 from inference.svm.preprocess import preprocess_document
 from schemas.models import AnalyzeResponse
 
@@ -48,17 +48,22 @@ def _load_artifacts(model_dir: Path):
     return svm_model, tfidf_vectorizer, float(decision_threshold)
 
 
-_SVM_MODEL, _TFIDF_VECTORIZER, _DECISION_THRESHOLD = _load_artifacts(ARTIFACTS_SVM_DIR)
+_SVM_MODEL, _TFIDF_VECTORIZER, _DECISION_THRESHOLD = _load_artifacts(get_svm_artifacts_dir())
 
 
-def analyze_text(text: str, title: str = "", url: str = "") -> AnalyzeResponse:
+def analyze_text(
+    text: str,
+    title: str = "",
+    url: str = "",
+    mode: str = "selection_only",
+) -> AnalyzeResponse:
     """
     Analyze text using the persisted SVM + TF-IDF model.
 
-    Uses the same title / URL / body composition as RoBERTa training
-    (:func:`core.model_input.build_model_input`), then TF-IDF preprocessing.
+    Classifies :func:`core.model_input.inference_input_text` (body / selection
+    only), then TF-IDF preprocessing.
     """
-    combined = build_model_input(text, title=title, url=url)
+    combined = inference_input_text(text, title=title, url=url, mode=mode)
     cleaned = preprocess_document(combined)
     X = _TFIDF_VECTORIZER.transform([cleaned])
     score = float(_SVM_MODEL.decision_function(X)[0])

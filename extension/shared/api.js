@@ -11,13 +11,17 @@
   /**
    * POST /analyze with JSON body. Returns parsed JSON or throws Error.
    */
-  async function postAnalyze(baseUrl, payload) {
+  async function postAnalyze(baseUrl, payload, options) {
     const base = normalizeBackendBaseUrl(baseUrl);
-    const response = await fetch(`${base}/analyze`, {
+    const fetchOptions = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
-    });
+    };
+    if (options && options.signal) {
+      fetchOptions.signal = options.signal;
+    }
+    const response = await fetch(`${base}/analyze`, fetchOptions);
     if (!response.ok) {
       const errText = await response.text();
       throw new Error(

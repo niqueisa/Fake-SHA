@@ -24,7 +24,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let popupSettings = { ...DEFAULT_POPUP_SETTINGS };
 
   const HISTORY_KEY = "fakeShaHistory";
-  const POPUP_SESSION_KEY = "fakeShaPopupSession";
+
+  /** @type {number | null} */
+  let activePopupTabId = null;
+  let sessionWatchAttached = false;
 
   function getStorage() {
     try {
@@ -42,43 +45,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const storage = getStorage();
 
-  function setPopupSession(sessionData) {
-    try {
-      if (storage) {
-        storage.set({ [POPUP_SESSION_KEY]: sessionData }, () => {});
-      } else {
-        localStorage.setItem(POPUP_SESSION_KEY, JSON.stringify(sessionData));
-      }
-    } catch (e) {
-      // ignore persistence errors
-    }
+  function setPopupSessionForTab(tabId, sessionData) {
+    if (tabId == null || !window.FakeShaSession) return;
+    void window.FakeShaSession.setForTab(tabId, sessionData);
   }
 
-  function getPopupSession(callback) {
-    try {
-      if (storage) {
-        storage.get(POPUP_SESSION_KEY, (result) => {
-          callback((result && result[POPUP_SESSION_KEY]) || null);
-        });
-        return;
-      }
-      const raw = localStorage.getItem(POPUP_SESSION_KEY);
-      callback(raw ? JSON.parse(raw) : null);
-    } catch (e) {
+  function getPopupSessionForTab(tabId, callback) {
+    if (tabId == null || !window.FakeShaSession) {
       callback(null);
+      return;
     }
+    void window.FakeShaSession.getForTab(tabId).then(callback).catch(() => callback(null));
   }
 
-  function clearPopupSession() {
-    try {
-      if (storage) {
-        storage.remove(POPUP_SESSION_KEY, () => {});
-      } else {
-        localStorage.removeItem(POPUP_SESSION_KEY);
-      }
-    } catch (e) {
-      // ignore
-    }
+  function clearPopupSessionForTab(tabId) {
+    if (tabId == null || !window.FakeShaSession) return;
+    void window.FakeShaSession.clearForTab(tabId);
   }
 
   function getExtensionStorage(callback) {
@@ -121,21 +103,87 @@ document.addEventListener("DOMContentLoaded", () => {
     callback({ ...DEFAULT_POPUP_SETTINGS });
   }
 
+  function watchSessionChanges(tabId) {
+    if (sessionWatchAttached || tabId == null) return;
+    if (typeof chrome === "undefined" || !chrome.storage || !chrome.storage.onChanged) return;
+    sessionWatchAttached = true;
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !window.FakeShaSession) return;
+      const change = changes[window.FakeShaSession.POPUP_SESSIONS_KEY];
+      if (!change) return;
+      const sessions = change.newValue || {};
+      const session = sessions[String(tabId)];
+      if (activePopupTabId !== tabId || !session) return;
+      void applySessionToView(session);
+    });
+  }
+
+  async function applySessionToView(session) {
+    if (!session || session.view === "empty") {
+      refreshSelectionFromPage();
+      showEmpty({ persistSession: false });
+      return;
+    }
+
+    if (session.view === "loading") {
+      showLoading();
+      return;
+    }
+
+    if (session.view === "result") {
+      const meta = session.meta || {};
+      const mapped =
+        session.resultData ||
+        mapBackendResponseToPopupFormat(session.backendResult || {}, {
+          articleTitle: meta.articleTitle || "Untitled",
+          sourceUrl: meta.sourceUrl || "",
+        });
+      renderResult(mapped);
+      showResult();
+      if (!session.historySaved) {
+        saveHistoryIfEnabled(mapped);
+        if (activePopupTabId != null) {
+          setPopupSessionForTab(activePopupTabId, {
+            ...session,
+            resultData: mapped,
+            historySaved: true,
+          });
+        }
+      }
+      return;
+    }
+
+    if (session.view === "error") {
+      showEmpty({ persistSession: false });
+      showError(session.errorMessage || "Analysis failed. Please try again.");
+      refreshSelectionFromPage();
+      return;
+    }
+
+    refreshSelectionFromPage();
+    showEmpty({ persistSession: false });
+  }
+
   function loadPopupSettingsThenRefresh() {
     getExtensionStorage(() => {
-      // Restore last popup view if available (e.g., keep result visible after popup closes/reopens).
-      getPopupSession((session) => {
-        if (session && session.view === "result" && session.resultData) {
-          renderResult(session.resultData);
-          showResult();
+      getActiveTabInfo().then(async (tabInfo) => {
+        activePopupTabId = tabInfo.tabId;
+        if (activePopupTabId == null) {
+          refreshSelectionFromPage();
           return;
         }
-        refreshSelectionFromPage();
+        watchSessionChanges(activePopupTabId);
+        if (!window.FakeShaSession) {
+          refreshSelectionFromPage();
+          return;
+        }
+        const session = await window.FakeShaSession.getForTab(activePopupTabId);
+        await applySessionToView(session);
       });
     });
   }
-  // Default state
-  showEmpty();
+  // Default state (do not write storage until the active tab session is restored)
+  showEmpty({ persistSession: false });
   loadPopupSettingsThenRefresh();
 
   btnAnalyze.addEventListener("click", () => {
@@ -147,97 +195,79 @@ document.addEventListener("DOMContentLoaded", () => {
    * Uses async/await for clean error handling.
    */
   async function doAnalyze() {
+    const tabInfo = await getActiveTabInfo();
+    const tabId = tabInfo.tabId;
+    activePopupTabId = tabId;
+
     showLoading();
     hideError();
 
-    try {
-      // 1. Load settings (backendUrl, mode, etc.)
-      const settings = await new Promise((resolve) => {
-        getExtensionStorage(resolve);
-      });
+    const settings = await new Promise((resolve) => {
+      getExtensionStorage(resolve);
+    });
 
-      const backendUrl = (settings.backendUrl || DEFAULT_POPUP_SETTINGS.backendUrl).trim();
-      if (!backendUrl) {
-        showErrorAndReset("Backend URL is not configured. Open Settings to set it.");
-        return;
-      }
+    let textToAnalyze = await getSelectedTextFromPage();
+    textToAnalyze = (textToAnalyze || "").trim();
 
-      const baseUrl = (window.FakeShaApi && window.FakeShaApi.normalizeBackendBaseUrl
-        ? window.FakeShaApi.normalizeBackendBaseUrl(backendUrl)
-        : backendUrl.replace(/\/+$/, ""));
-
-      // 2. Get text to analyze: selected text first, or page content in fallback mode
-      let textToAnalyze = await getSelectedTextFromPage();
-      textToAnalyze = (textToAnalyze || "").trim();
-
-      if (!textToAnalyze) {
-        if (settings.analysisMode === "selection_fallback") {
-          // Fallback mode: try to extract page content
-          const pageContent = await getPageContentFromPage();
-          textToAnalyze = (pageContent.text || "").trim();
-          if (!textToAnalyze) {
-            showErrorAndReset(
-              "Could not extract page content. Try selecting text manually, or open an article page."
-            );
-            return;
-          }
-          // Use page title from extraction if available (tab title is fetched below)
-        } else {
-          showErrorAndReset("Please select text on the page first.");
+    if (!textToAnalyze) {
+      if (settings.analysisMode === "selection_fallback") {
+        const pageContent = await getPageContentFromPage();
+        textToAnalyze = (pageContent.text || "").trim();
+        if (!textToAnalyze) {
+          showErrorAndReset(
+            "Could not extract page content. Try selecting text manually, or open an article page."
+          );
           return;
         }
+      } else {
+        showErrorAndReset("Please select text on the page first.");
+        return;
       }
-
-      // 3. Get active tab URL and title (fallback to empty if unavailable)
-      const tabInfo = await getActiveTabInfo();
-      const pageUrl = tabInfo.url || "";
-      const pageTitle = tabInfo.title || "Untitled";
-
-      // 4. Build request payload
-      const payload = {
-        text: textToAnalyze,
-        url: pageUrl,
-        title: pageTitle,
-        mode: settings.analysisMode || "selection_only",
-      };
-
-      // 5. Send POST request to backend (shared helper)
-      if (!window.FakeShaApi || typeof window.FakeShaApi.postAnalyze !== "function") {
-        throw new Error("Extension API module missing (shared/api.js).");
-      }
-      const backendResult = await window.FakeShaApi.postAnalyze(baseUrl, payload);
-
-      // 6. Map backend response to popup's render format
-      const mappedData = mapBackendResponseToPopupFormat(backendResult, {
-        articleTitle: pageTitle,
-        sourceUrl: pageUrl,
-      });
-
-      // 7. Render result and save to history
-      renderResult(mappedData);
-      saveHistoryIfEnabled(mappedData);
-      showResult();
-      setPopupSession({ view: "result", resultData: mappedData });
-
-      // 8. If highlightTokens is enabled, highlight contributing phrases on the page
-      if (settings.highlightTokens && tabInfo.tabId != null) {
-        // Prefer SHAP top tokens for highlighting; fallback to legacy backend.tokens.
-        const shapTopTokens = Array.isArray(backendResult?.explanation?.top_tokens)
-          ? backendResult.explanation.top_tokens
-          : [];
-        const tokens = shapTopTokens.length > 0
-          ? shapTopTokens
-          : (Array.isArray(backendResult.tokens) ? backendResult.tokens : []);
-        const highlightMode = String(mappedData?.label || "").toUpperCase().includes("REAL")
-          ? "real"
-          : "fake";
-        sendHighlightTokensToPage(tabInfo.tabId, tokens, textToAnalyze, highlightMode);
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "An unexpected error occurred.";
-      showErrorAndReset(getUserFriendlyError(message));
     }
+
+    const pageUrl = tabInfo.url || "";
+    const pageTitle = tabInfo.title || "Untitled";
+
+    const payload = {
+      text: textToAnalyze,
+      url: pageUrl,
+      title: pageTitle,
+      mode: settings.analysisMode || "selection_only",
+    };
+
+    const meta = {
+      articleTitle: pageTitle,
+      sourceUrl: pageUrl,
+      textToAnalyze,
+      highlightTokens: !!settings.highlightTokens,
+    };
+
+    if (tabId != null) {
+      setPopupSessionForTab(tabId, { view: "loading", meta });
+    }
+
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      showErrorAndReset("Extension runtime unavailable. Reload the extension and try again.");
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        type: "fakeSha_startAnalyze",
+        tabId,
+        payload,
+        meta,
+      },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          showErrorAndReset("Could not start analysis. Reload the extension and try again.");
+          return;
+        }
+        if (response && response.ok === false) {
+          showErrorAndReset(getUserFriendlyError(response.error || "Analysis failed to start."));
+        }
+      }
+    );
   }
 
   /**
@@ -329,13 +359,53 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
+   * Normalize text for loose matching between SHAP tokens and user selection.
+   */
+  function normalizeForScopeMatch(s) {
+    return String(s || "")
+      .normalize("NFKC")
+      .toLowerCase()
+      .replace(/[\u2018\u2019`´]/g, "'")
+      .replace(/[^\w\s']/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function tokenMatchesScope(token, scopeNorm) {
+    const needle = normalizeForScopeMatch(token);
+    if (needle.length < 2) return false;
+    if (scopeNorm.includes(needle)) return true;
+
+    const needleFlat = needle.replace(/'/g, "");
+    const scopeFlat = scopeNorm.replace(/'/g, "");
+    if (needleFlat.length >= 2 && scopeFlat.includes(needleFlat)) return true;
+
+    const words = needle.split(" ").filter((w) => w.length >= 2);
+    if (words.length > 1) {
+      return words.every((w) => scopeNorm.includes(w));
+    }
+    return false;
+  }
+
+  /**
+   * Keep SHAP tokens that plausibly appear in the analyzed selection (for page highlights).
+   */
+  function filterTokensWithinScope(tokens, scopeText) {
+    const scope = normalizeForScopeMatch(scopeText);
+    if (!scope) return [];
+    const list = Array.isArray(tokens) ? tokens : [];
+    return list
+      .map((t) => (typeof t === "string" ? t : t && t.text ? t.text : ""))
+      .map((t) => String(t || "").trim())
+      .filter((token) => tokenMatchesScope(token, scope));
+  }
+
+  /**
    * Send tokens to content script for page highlighting (when highlightTokens setting is on).
    */
   function sendHighlightTokensToPage(tabId, tokens, scopeText = "", mode = "fake") {
     if (tabId == null || typeof chrome === "undefined" || !chrome.tabs?.sendMessage) return;
-    const tokenTexts = Array.isArray(tokens)
-      ? tokens.map((t) => (typeof t === "string" ? t : t && t.text ? t.text : "")).filter(Boolean)
-      : [];
+    const tokenTexts = filterTokensWithinScope(tokens, scopeText);
     if (tokenTexts.length === 0) return;
     chrome.tabs.sendMessage(
       tabId,
@@ -363,6 +433,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  /** Backend returns 0–1; stored UI values use 0–100 integer percent. */
+  function confidenceToPercent(value) {
+    const n =
+      typeof value === "number"
+        ? value
+        : parseFloat(String(value || "0").replace("%", "")) || 0;
+    if (n > 0 && n <= 1) {
+      return Math.round(n * 100);
+    }
+    return Math.round(Math.min(100, Math.max(0, n)));
+  }
+
+  function formatConfidencePercent(value) {
+    return `${confidenceToPercent(value)}%`;
+  }
+
   /**
    * Map backend /analyze response to popup's render format.
    * SHAP parsing rules:
@@ -372,10 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function mapBackendResponseToPopupFormat(backend, meta = {}) {
     const isFake = String(backend.verdict || "").toUpperCase() === "FAKE";
-    const confidencePct =
-      typeof backend.confidence === "number"
-        ? backend.confidence * 100
-        : parseFloat(String(backend.confidence || "0")) * 100 || 0;
+    const confidencePct = confidenceToPercent(backend.confidence);
 
     const label = isFake ? "FAKE NEWS DETECTED" : "REAL NEWS DETECTED";
     const topTokensTitle = isFake
@@ -414,7 +497,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Parse SHAP top tokens; fallback to legacy tokens if SHAP payload is missing.
     const shapTokensRaw = Array.isArray(explanation?.top_tokens) ? explanation.top_tokens : [];
     const legacyTokensRaw = Array.isArray(backend.tokens) ? backend.tokens : [];
-    const rawTopTokens = (shapTokensRaw.length > 0 ? shapTokensRaw : legacyTokensRaw).map((t) => {
+    // Show all backend SHAP tokens in the list (inference already uses selection/body only).
+    const tokenSource = shapTokensRaw.length > 0 ? shapTokensRaw : legacyTokensRaw;
+    const rawTopTokens = tokenSource.map((t) => {
       const scoreRaw = Number(t?.score);
       const score = Number.isFinite(scoreRaw) ? scoreRaw : 0;
       const direction = typeof t?.direction === "string" ? t.direction : "";
@@ -436,17 +521,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const note = typeof explanation?.note === "string"
       ? explanation.note
-      : "SHAP values indicate feature contribution and do not verify factual correctness.";
-    // Keep summary deterministic so history snapshots remain comparable across sessions.
-    const summary = `The model classified this article as ${isFake ? "FAKE" : "REAL"} with ${Math.min(100, Math.max(0, confidencePct)).toFixed(1)}% confidence. `
-      + "The explanation below shows which textual patterns contributed most to the prediction. "
+      : "SHAP identifies token contributions to the model prediction. It does not verify factual correctness.";
+    const confidenceStr = `${confidencePct}%`;
+    const verdictWord = isFake ? "FAKE" : "REAL";
+    // Summary sits at the bottom; indicators and tokens are above it.
+    const summary = `The model classified this content as ${verdictWord} with ${confidenceStr} confidence. `
+      + "The verdict, key indicators, and top tokens above show which textual patterns most influenced this result. "
       + note;
 
     return {
       articleTitle: meta.articleTitle || "Untitled",
       sourceUrl: meta.sourceUrl || "",
       label,
-      confidence: Math.min(100, Math.max(0, confidencePct)),
+      confidence: confidencePct,
       indicators,
       topTokensTitle,
       topTokensLegend,
@@ -505,7 +592,7 @@ document.addEventListener("DOMContentLoaded", () => {
   btnClear.addEventListener("click", () => {
     showEmpty();
     hideError();
-    clearPopupSession();
+    clearPopupSessionForTab(activePopupTabId);
 
     if (selectedTextValue) {
       selectedTextValue.textContent = "Nothing selected yet.";
@@ -518,27 +605,40 @@ document.addEventListener("DOMContentLoaded", () => {
     clearHighlightsOnPage();
   });
   btnCancelLoading.addEventListener("click", () => {
+    const tabId = activePopupTabId;
+    if (tabId != null && typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: "fakeSha_cancelAnalyze", tabId });
+    }
     showEmpty();
     hideError();
-    setPopupSession({ view: "empty" });
+    clearPopupSessionForTab(tabId);
   });
 
   if (btnOpenHistory) {
     btnOpenHistory.addEventListener("click", () => {
-      window.location.href = "../history/history.html";
+      if (window.FakeShaNav) {
+        window.FakeShaNav.navigateTo("history/history.html");
+      } else {
+        window.location.href = "../history/history.html";
+      }
     });
   }
 
   if (btnOpenSettings) {
     btnOpenSettings.addEventListener("click", () => {
-      window.location.href = "../settings/settings.html";
+      if (window.FakeShaNav) {
+        window.FakeShaNav.navigateTo("settings/settings.html");
+      } else {
+        window.location.href = "../settings/settings.html";
+      }
     });
   }
+
 
   // -----------------------------
   // State helpers
   // -----------------------------
-  function showEmpty() {
+  function showEmpty({ persistSession = true } = {}) {
     emptyState.classList.remove("hidden");
     loadingState.classList.add("hidden");
     resultState.classList.add("hidden");
@@ -546,7 +646,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (selectionHeader) {
       selectionHeader.textContent = "No text selected";
     }
-    setPopupSession({ view: "empty" });
+    if (persistSession && activePopupTabId != null) {
+      setPopupSessionForTab(activePopupTabId, { view: "empty" });
+    }
   }
 
   function showLoading() {
@@ -679,6 +781,83 @@ document.addEventListener("DOMContentLoaded", () => {
   // -----------------------------
   // Rendering
   // -----------------------------
+  const INDICATOR_TOKENS_COLLAPSED_MAX_CHARS = 140;
+
+  function buildIndicatorTokensBlock(tokens, indicatorIdx) {
+    if (!Array.isArray(tokens) || tokens.length === 0) return "";
+    const fullText = tokens.map((t) => String(t || "").trim()).filter(Boolean).join(", ");
+    if (!fullText) return "";
+    const needsToggle = fullText.length > INDICATOR_TOKENS_COLLAPSED_MAX_CHARS;
+
+    const toggleBtn = needsToggle
+      ? `<button
+          type="button"
+          class="indicator-tokens-toggle mt-0.5 flex-shrink-0 p-0 text-gray-500 hover:text-gray-800 transition"
+          data-indicator-idx="${indicatorIdx}"
+          aria-expanded="false"
+          aria-label="Show all tokens"
+          title="Show all tokens"
+        >
+          <svg class="indicator-tokens-chevron h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 10l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>`
+      : "";
+
+    return `
+      <div class="indicator-tokens-row mt-1.5">
+        <span class="indicator-tokens-label">Tokens:</span>
+        <div
+          class="indicator-tokens-text text-xs text-gray-500 leading-relaxed${needsToggle ? " line-clamp-2" : ""}"
+          data-indicator-idx="${indicatorIdx}"
+        >${escapeHtml(fullText)}</div>
+        ${toggleBtn}
+      </div>
+    `;
+  }
+
+  function buildIndicatorGlossarySection(data) {
+    const detectedNames = (data?.indicators || []).map((ind) => ind?.name).filter(Boolean);
+    if (window.FakeShaIndicatorGlossary?.buildIndicatorGlossaryHtml) {
+      return window.FakeShaIndicatorGlossary.buildIndicatorGlossaryHtml({ detectedNames });
+    }
+    return `
+      <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div class="text-sm font-semibold text-[#1e2c3e]">What do the indicators mean?</div>
+        <p class="mt-1 text-xs text-gray-600 leading-relaxed">
+          Indicators group SHAP token contributions into readable categories. Reload the extension if this section does not list definitions.
+        </p>
+      </div>
+    `;
+  }
+
+  function setupIndicatorTokenToggles(root) {
+    if (!root) return;
+    root.querySelectorAll(".indicator-tokens-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = btn.getAttribute("data-indicator-idx");
+        const textEl = root.querySelector(`.indicator-tokens-text[data-indicator-idx="${idx}"]`);
+        const chevron = btn.querySelector(".indicator-tokens-chevron");
+        if (!textEl) return;
+
+        const expanded = btn.getAttribute("aria-expanded") === "true";
+        if (expanded) {
+          textEl.classList.add("line-clamp-2");
+          btn.setAttribute("aria-expanded", "false");
+          btn.setAttribute("aria-label", "Show all tokens");
+          btn.title = "Show all tokens";
+          if (chevron) chevron.classList.remove("is-expanded");
+        } else {
+          textEl.classList.remove("line-clamp-2");
+          btn.setAttribute("aria-expanded", "true");
+          btn.setAttribute("aria-label", "Show fewer tokens");
+          btn.title = "Show fewer tokens";
+          if (chevron) chevron.classList.add("is-expanded");
+        }
+      });
+    });
+  }
+
   function renderResult(data) {
     const theme = getThemeForData(data);
 
@@ -704,9 +883,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const indicatorSummary = ind.summary
           ? `<div class="mt-1 text-xs text-gray-500 leading-relaxed">${escapeHtml(ind.summary)}</div>`
           : "";
-        const indicatorTokens = Array.isArray(ind.tokens) && ind.tokens.length > 0
-          ? `<div class="mt-1 text-xs text-gray-500">Tokens: ${escapeHtml(ind.tokens.join(", "))}</div>`
-          : "";
+        const indicatorTokens = buildIndicatorTokensBlock(ind.tokens, idx);
         return `
           <div class="mt-4">
             <div class="h-3 w-full rounded-full" style="background:${theme.indicatorBg};">
@@ -792,7 +969,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           <div class="min-w-0">
             <div class="text-sm font-extrabold tracking-wide" style="color:${theme.bannerText};">${escapeHtml(data.label)}</div>
-            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${data.confidence.toFixed(1)}%</span></div>
+            <div class="mt-1 text-sm" style="color:${theme.bannerText};">Confidence: <span class="font-extrabold">${formatConfidencePercent(data.confidence)}</span></div>
           </div>
         </div>
 
@@ -864,9 +1041,14 @@ document.addEventListener("DOMContentLoaded", () => {
           Back
         </button>
 
-        <div class="mt-4 text-sm text-gray-400 italic">What does the indicators mean?</div>
+        ${buildIndicatorGlossarySection(data)}
       </section>
     `;
+
+    setupIndicatorTokenToggles(resultState);
+    if (window.FakeShaIndicatorGlossary?.setupIndicatorGlossaryToggle) {
+      window.FakeShaIndicatorGlossary.setupIndicatorGlossaryToggle(resultState);
+    }
 
     // Back
     const btnBack = document.getElementById("btnBack");
@@ -879,27 +1061,44 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         // Fallback to popup main view.
         hideError();
-        clearPopupSession();
+        clearPopupSessionForTab(activePopupTabId);
         showEmpty();
         refreshSelectionFromPage();
       });
     }
 
-    // Feedback: open default mail client with context (no backend endpoint required).
     const btnReport = document.getElementById("btnReportIssue");
     if (btnReport) {
       btnReport.addEventListener("click", () => {
-        const subject = encodeURIComponent("FAKE-SHA feedback");
+        const version =
+          typeof chrome !== "undefined" && chrome.runtime?.getManifest
+            ? chrome.runtime.getManifest().version
+            : "";
         const lines = [
+          "Describe the issue below:",
+          "",
+          "---",
+          "",
           `Title: ${data.articleTitle || ""}`,
           `URL: ${data.sourceUrl || ""}`,
           `Verdict: ${data.label || ""}`,
-          `Confidence: ${typeof data.confidence === "number" ? `${data.confidence.toFixed(1)}%` : ""}`,
+          `Confidence: ${formatConfidencePercent(data.confidence)}`,
+          version ? `Extension version: ${version}` : "",
           "",
           data.summary ? `Summary:\n${data.summary}` : "",
-        ].filter(Boolean);
-        const body = encodeURIComponent(lines.join("\n"));
-        window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+        ];
+        if (window.FakeShaFeedback?.openFeedbackMailto) {
+          window.FakeShaFeedback.openFeedbackMailto("FAKE-SHA issue report", lines);
+        } else {
+          const to = [
+            "dicl2022-4733-98895@bicol-u.edu.ph",
+            "jcnm2022-8677-11726@bicol-u.edu.ph",
+            "tqg2022-5560-42938@bicol-u.edu.ph",
+          ].join(",");
+          window.location.assign(
+            `mailto:${to}?subject=${encodeURIComponent("FAKE-SHA issue report")}&body=${encodeURIComponent(lines.join("\n"))}`
+          );
+        }
       });
     }
 
@@ -967,10 +1166,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const isFake = label.includes("FAKE");
       const verdict = isFake ? "Fake News" : "Real News";
 
-      const confidenceNum =
-        typeof resultData.confidence === "number"
-          ? resultData.confidence
-          : parseFloat(String(resultData.confidence || "0").replace("%", "")) || 0;
+      const confidenceNum = confidenceToPercent(resultData.confidence);
 
       const now = new Date();
       // Persist fully-rendered UI fields so History view can render without recomputing.

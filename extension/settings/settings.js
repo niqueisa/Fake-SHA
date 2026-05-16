@@ -24,6 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const SETTINGS_KEY = "fakeShaSettings";
   const HISTORY_KEY = "fakeShaHistory";
+  const SETTINGS_UI_KEY = "fakeShaSettingsUi";
+  const popupMain = document.querySelector(".popup-main");
 
   function getStorage() {
     try {
@@ -126,7 +128,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (btnBackToPopup) {
     btnBackToPopup.addEventListener("click", () => {
-      window.location.href = "../popup/popup.html";
+      if (window.FakeShaNav) {
+        window.FakeShaNav.navigateTo("popup/popup.html");
+      } else {
+        window.location.href = "../popup/popup.html";
+      }
+    });
+  }
+
+  function saveSettingsUiState() {
+    if (!window.FakeShaNav) return;
+    window.FakeShaNav.savePageUiState(SETTINGS_UI_KEY, {
+      scrollTop: popupMain ? popupMain.scrollTop : 0,
+    });
+  }
+
+  window.addEventListener("pagehide", saveSettingsUiState);
+
+  if (window.FakeShaNav) {
+    window.FakeShaNav.loadPageUiState(SETTINGS_UI_KEY, (ui) => {
+      if (ui && popupMain && typeof ui.scrollTop === "number") {
+        popupMain.scrollTop = ui.scrollTop;
+      }
     });
   }
 

@@ -1,19 +1,38 @@
 /* Non-generated extension UI tweaks.
    Keep this separate from the Tailwind build output (styles.css). */
 
-/* Consistent popup size across pages */
+/* Consistent popup size across popup / settings / history (do not use w-[280px] on body) */
+:root{
+  --fake-sha-popup-width:360px;
+  --fake-sha-popup-height:580px;
+}
+
+html.fake-sha-shell-root,
+html.fake-sha-shell-root body,
+html.fake-sha-popup-root,
+html.fake-sha-popup-root body.popup-fixed{
+  width:var(--fake-sha-popup-width) !important;
+  min-width:var(--fake-sha-popup-width) !important;
+  max-width:var(--fake-sha-popup-width) !important;
+  height:var(--fake-sha-popup-height) !important;
+  min-height:var(--fake-sha-popup-height) !important;
+  max-height:var(--fake-sha-popup-height) !important;
+  overflow:hidden !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+}
+
 body.popup-fixed{
-  width:360px;min-width:360px;max-width:360px;
-  height:580px;min-height:580px;max-height:580px;
-  overflow:hidden;
   display:flex;
   flex-direction:column;
 }
+
 .popup-fixed .popup-inner{
   display:flex;
   flex-direction:column;
   flex:1;
   min-height:0;
+  width:100%;
   overflow:hidden;
 }
 .popup-fixed .popup-main{
@@ -27,6 +46,164 @@ body.popup-fixed{
 #selectedTextValue{
   max-height:8rem;
   overflow-y:auto;
+}
+
+/* Collapsed indicator token lists in results */
+.line-clamp-2{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+
+.indicator-tokens-row{
+  display:flex;
+  align-items:flex-start;
+  gap:0.625rem;
+}
+.indicator-tokens-label{
+  flex-shrink:0;
+  font-size:0.75rem;
+  font-weight:500;
+  color:#6b7280;
+  padding-top:0.125rem;
+}
+.indicator-tokens-text{
+  flex:1;
+  min-width:0;
+}
+.indicator-tokens-toggle{
+  flex-shrink:0;
+  margin-top:0.125rem;
+}
+.indicator-tokens-chevron{
+  transition:transform .15s ease;
+}
+.indicator-tokens-chevron.is-expanded{
+  transform:rotate(180deg);
+}
+
+/* Indicator glossary (styles here — Tailwind classes in JS strings are not in the build) */
+.indicator-glossary{
+  margin-top:1rem;
+}
+.indicator-glossary-toggle{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.75rem;
+  padding:0.875rem 1rem;
+  text-align:left;
+  border:1px solid #e5e7eb;
+  border-radius:0.75rem;
+  background:#f9fafb;
+  cursor:pointer;
+  transition:background-color .15s ease;
+}
+.indicator-glossary-toggle:hover{
+  background:#f3f4f6;
+}
+.indicator-glossary-toggle-label{
+  flex:1;
+  min-width:0;
+  font-size:0.875rem;
+  font-weight:600;
+  line-height:1.45;
+  color:#1e2c3e;
+}
+.indicator-glossary-panel{
+  margin-top:0.625rem;
+  padding:1rem 1rem 0.5rem;
+  border:1px solid #e5e7eb;
+  border-radius:0.75rem;
+  background:#f9fafb;
+}
+.indicator-glossary-panel.is-collapsed,
+.indicator-glossary-item-panel.is-collapsed{
+  display:none;
+}
+.indicator-glossary-intro{
+  margin:0 0 1rem;
+  font-size:0.8125rem;
+  line-height:1.55;
+  color:#6b7280;
+}
+.indicator-glossary-list{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+.indicator-glossary-item{
+  border-top:1px solid #e5e7eb;
+}
+.indicator-glossary-item:first-child{
+  border-top:none;
+}
+.indicator-glossary-item-toggle{
+  width:100%;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:0.75rem;
+  padding:0.875rem 0;
+  text-align:left;
+  background:transparent;
+  border:none;
+  cursor:pointer;
+}
+.indicator-glossary-item-toggle:hover .indicator-glossary-item-title{
+  color:#2f6fd6;
+}
+.indicator-glossary-item-label{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:0.375rem;
+  flex:1;
+  min-width:0;
+}
+.indicator-glossary-item-title{
+  font-size:0.875rem;
+  font-weight:600;
+  line-height:1.45;
+  color:#1e2c3e;
+}
+.indicator-glossary-item-badge{
+  display:inline-block;
+  padding:0.125rem 0.5rem;
+  font-size:0.625rem;
+  font-weight:600;
+  letter-spacing:0.04em;
+  text-transform:uppercase;
+  color:#2f6fd6;
+  background:#eaf3ff;
+  border-radius:9999px;
+  line-height:1.4;
+}
+.indicator-glossary-item-panel{
+  padding:0 0 1rem;
+}
+.indicator-glossary-item-desc{
+  margin:0;
+  font-size:0.8125rem;
+  line-height:1.6;
+  color:#4b5563;
+}
+.indicator-glossary-chevron{
+  flex-shrink:0;
+  width:1.125rem;
+  height:1.125rem;
+  margin-top:0.125rem;
+  color:#6b7280;
+  transition:transform .15s ease, color .15s ease;
+}
+.indicator-glossary-chevron.is-expanded{
+  transform:rotate(180deg);
+}
+.indicator-glossary-item-toggle:hover .indicator-glossary-chevron,
+.indicator-glossary-toggle:hover .indicator-glossary-chevron{
+  color:#1e2c3e;
 }
 
 /* Lock header height so controls can't change bar size */
