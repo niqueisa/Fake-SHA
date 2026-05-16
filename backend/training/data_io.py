@@ -1,8 +1,11 @@
 """
-Shared CSV loading for SVM and RoBERTa training.
+Shared CSV / Hugging Face loading for SVM and transformer training.
 
-Uses :func:`core.model_input.build_model_input` so both pipelines see the same
-strings as ``POST /analyze`` (optional ``title`` / ``url`` + body).
+- **Hugging Face** — Each split must provide ``label`` and ``article`` (or legacy ``text``).
+  Extra columns are dropped; training uses article body only.
+- **CSV** — ``label`` + ``article``/``text``, with optional ``title`` / ``url``. When those
+  columns exist and ``article_only`` is False, uses :func:`core.model_input.build_model_input`
+  so strings match ``POST /analyze``.
 
 - **SVM** — Applies TF-IDF-style lowercasing / whitespace normalization after composition.
 - **RoBERTa / transformers** — Uses composed text only (strip empty rows); no lowercasing,
@@ -84,24 +87,28 @@ def _prepare_classification_df(
     df[text_col] = df[text_col].astype(str)
     df["label"] = df["label"].apply(normalize_label)
 
-    bodies = df[text_col]
-    if article_only or "title" not in df.columns:
-        titles = pd.Series([""] * len(df), index=df.index)
-    else:
-        titles = df["title"].fillna("").astype(str)
-    if article_only or "url" not in df.columns:
-        urls = pd.Series([""] * len(df), index=df.index)
-    else:
-        urls = df["url"].fillna("").astype(str)
+    bodies = df[text_col].astype(str)
 
-    composed = pd.Series(
-        [
-            build_model_input(str(b), title=str(t), url=str(u))
-            for b, t, u in zip(bodies, titles, urls)
-        ],
-        index=df.index,
-        dtype=object,
-    )
+    if article_only or ("title" not in df.columns and "url" not in df.columns):
+        composed = bodies.str.strip()
+    else:
+        if "title" in df.columns:
+            titles = df["title"].fillna("").astype(str)
+        else:
+            titles = pd.Series([""] * len(df), index=df.index)
+        if "url" in df.columns:
+            urls = df["url"].fillna("").astype(str)
+        else:
+            urls = pd.Series([""] * len(df), index=df.index)
+        composed = pd.Series(
+            [
+                build_model_input(str(b), title=str(t), url=str(u))
+                for b, t, u in zip(bodies, titles, urls)
+            ],
+            index=df.index,
+            dtype=object,
+        )
+        composed = composed.str.strip()
     if tfidf_preprocess:
         composed = preprocess_tfidf_style(composed)
     else:
@@ -149,19 +156,30 @@ def load_classification_csv(
     )
 
 
+def _hf_text_column(column_names: list[str] | set[str]) -> str:
+    """Return the article/text column name present on a Hugging Face split."""
+    if "article" in column_names:
+        return "article"
+    if "text" in column_names:
+        return "text"
+    raise ValueError(
+        "Hugging Face split must include an 'article' (preferred) or 'text' column."
+    )
+
+
 def load_classification_hf(
     dataset_name: str,
     *,
     split: str,
-    article_only: bool = False,
+    article_only: bool = True,
     tfidf_preprocess: bool = False,
     revision: str | None = None,
 ) -> tuple[list[str], np.ndarray]:
     """
     Load a split from Hugging Face datasets and return (texts, labels).
 
-    Expected columns: ``label`` plus ``article`` (or ``text``), with optional
-    ``title`` and ``url``.
+    Expected columns: ``label`` and ``article`` (or legacy ``text``). Other columns
+    are ignored. Training always uses article body text only.
     """
     try:
         from datasets import load_dataset
@@ -172,11 +190,21 @@ def load_classification_hf(
         ) from e
 
     ds = load_dataset(dataset_name, split=split, revision=revision)
+    text_col = _hf_text_column(ds.column_names)
+    if "label" not in ds.column_names:
+        raise ValueError(
+            f"Hugging Face split {dataset_name}[{split}] is missing required column 'label'."
+        )
+
+    ds = ds.select_columns(["label", text_col])
+    if text_col != "article":
+        ds = ds.rename_column(text_col, "article")
+
     df = ds.to_pandas()
     source_name = f"{dataset_name}[{split}]" if revision is None else f"{dataset_name}[{split}]@{revision}"
     return _prepare_classification_df(
         df,
         source_name=source_name,
-        article_only=article_only,
+        article_only=True,
         tfidf_preprocess=tfidf_preprocess,
     )

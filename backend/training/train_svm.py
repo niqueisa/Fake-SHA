@@ -274,7 +274,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--article-only",
         action="store_true",
-        help="Ignore title/url columns and train on body text only (ablation / legacy CSVs).",
+        help="Train on article/body only (default when --hf-dataset is set).",
     )
 
     return parser.parse_args()
@@ -284,7 +284,8 @@ def main() -> None:
     args = parse_args()
     np.random.seed(args.seed)
 
-    load_kw = {"article_only": args.article_only}
+    article_only = args.article_only or bool(args.hf_dataset)
+    load_kw = {"article_only": article_only}
     if args.hf_dataset:
         train_texts, train_labels = load_data_hf(
             args.hf_dataset,
@@ -310,7 +311,7 @@ def main() -> None:
         test_texts, test_labels = load_data(args.test_csv, **load_kw)
 
     print("\n=== Run configuration (align with RoBERTa training notes) ===")
-    print(f"seed={args.seed}, article_only={args.article_only}, class_weight={args.class_weight}")
+    print(f"seed={args.seed}, article_only={article_only}, class_weight={args.class_weight}")
     if args.hf_dataset:
         print(f"hf_dataset={args.hf_dataset}")
         print(f"hf_train_split={args.hf_train_split}")
