@@ -92,5 +92,5 @@ Then run training commands.
 ## Notes
 
 - Splits detected from dataset hub: `train`, `validation`, `test`.
-- Required columns detected: `label`, `title`, `article`, `url`.
+- Required Hugging Face columns per split: `label`, `article` (legacy `text` is accepted and renamed to `article`).
 - Trained artifacts are written under `backend/artifacts/`.

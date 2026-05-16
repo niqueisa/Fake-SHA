@@ -191,7 +191,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--article-only",
         action="store_true",
-        help="Ignore title/url columns (same flag as train_svm).",
+        help="Train on article/body only (default when --hf-dataset is set).",
     )
     parser.add_argument(
         "--save-strategy",
@@ -215,42 +215,44 @@ def main() -> None:
             "The 'datasets' package is required. Install with: pip install datasets"
         ) from e
 
+    article_only = args.article_only or bool(args.hf_dataset)
+
     if args.hf_dataset:
         train_texts, train_labels = load_classification_hf(
             args.hf_dataset,
             split=args.hf_train_split,
-            article_only=args.article_only,
+            article_only=article_only,
             tfidf_preprocess=False,
             revision=args.hf_revision,
         )
         val_texts, val_labels = load_classification_hf(
             args.hf_dataset,
             split=args.hf_val_split,
-            article_only=args.article_only,
+            article_only=article_only,
             tfidf_preprocess=False,
             revision=args.hf_revision,
         )
         test_texts, test_labels = load_classification_hf(
             args.hf_dataset,
             split=args.hf_test_split,
-            article_only=args.article_only,
+            article_only=article_only,
             tfidf_preprocess=False,
             revision=args.hf_revision,
         )
     else:
         train_texts, train_labels = load_classification_csv(
             args.train_csv,
-            article_only=args.article_only,
+            article_only=article_only,
             tfidf_preprocess=False,
         )
         val_texts, val_labels = load_classification_csv(
             args.val_csv,
-            article_only=args.article_only,
+            article_only=article_only,
             tfidf_preprocess=False,
         )
         test_texts, test_labels = load_classification_csv(
             args.test_csv,
-            article_only=args.article_only,
+            article_only=article_only,
             tfidf_preprocess=False,
         )
 
@@ -260,7 +262,7 @@ def main() -> None:
     print("\n=== XLM-RoBERTa fine-tuning configuration ===")
     print(f"model_name={args.model_name}")
     print(
-        f"seed={args.seed}, article_only={args.article_only}, class_weight={args.class_weight}"
+        f"seed={args.seed}, article_only={article_only}, class_weight={args.class_weight}"
     )
     print(f"epochs={args.epochs}, lr={args.lr}, max_length={args.max_length}")
 
