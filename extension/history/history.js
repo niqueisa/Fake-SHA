@@ -43,9 +43,9 @@ document.addEventListener("DOMContentLoaded", () => {
         ? value
         : parseFloat(String(value || "0").replace("%", "")) || 0;
     if (n > 0 && n <= 1) {
-      return Math.round(n * 100);
+      return (n * 100).toFixed(1);
     }
-    return Math.round(Math.min(100, Math.max(0, n)));
+    return (Math.min(100, Math.max(0, n))).toFixed(1);
   }
 
   function formatConfidencePercent(value) {
@@ -117,9 +117,9 @@ document.addEventListener("DOMContentLoaded", () => {
         articleTitle: item.articleTitle || item.title || "Untitled",
         sourceUrl: item.sourceUrl || "",
         label: item.label || (item.isFake ? "FAKE NEWS DETECTED" : "REAL NEWS DETECTED"),
-        confidence: confidenceToPercent(
+        confidence: parseFloat(confidenceToPercent(
           typeof item.confidenceNum === "number" ? item.confidenceNum : item.confidence
-        ),
+        )),
         indicators: item.indicators,
         summary: item.summary || item.explanation || "No summary available.",
         topTokensTitle: item.topTokensTitle || "Key tokens",
@@ -128,7 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
       };
     }
     // Legacy fallback: rebuild minimal shape for older stored records.
-    const confNum = confidenceToPercent(item.confidence);
+    const confNum = parseFloat(confidenceToPercent(item.confidence));
     const indNames = Array.isArray(item.indicators) ? item.indicators : [];
     const indicators = indNames.map((name, i) => ({
       name: typeof name === "string" ? name : "Indicator",
@@ -231,7 +231,7 @@ document.addEventListener("DOMContentLoaded", () => {
       })
       .join(" ");
 
-    const confidenceVal = confidenceToPercent(data.confidence);
+    const confidenceVal = data.confidence;
 
     const tokensSection = tokens.length
       ? `
@@ -459,7 +459,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isFake = label.includes("FAKE");
         const verdict = raw.verdict || (isFake ? "Fake News" : "Real News");
 
-        const confidenceNum = confidenceToPercent(raw.confidence);
+        const confidenceNum = parseFloat(confidenceToPercent(raw.confidence));
 
         const title = raw.articleTitle || raw.title || "Untitled";
 
