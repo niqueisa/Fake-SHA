@@ -1,6 +1,6 @@
 # FAKE-SHA
 
-FAKE-SHA is a browser extension developed as a Bachelor of Science in Computer Science (BSCS 4B) thesis project. The system assists users in analyzing selected text from web pages and identifying the likelihood of misinformation using machine learning and natural language processing techniques.
+FAKE-SHA is a browser extension and backend analyzer developed as a Bachelor of Science in Computer Science (BSCS 4B) thesis project. The system helps users analyze selected text from web pages and classifies content as FAKE or REAL, returning a confidence score, a short summary, and indicator breakdowns. The project has progressed beyond the prototype stage and includes a trained model and a public dataset hosted on Hugging Face.
 
 ## Developers
 
@@ -25,7 +25,31 @@ FAKE-SHA consists of two primary components:
 * Built using Python (FastAPI)
 * Performs analysis and returns verdict (FAKE/REAL), confidence, summary, and indicators
 * Integrates with Supabase (PostgreSQL) for optional analysis record storage
-* Designed for future ML/NLP model integration (e.g., RoBERTa, SHAP)
+* Integrates with a trained transformer model for inference (Hugging Face model)
+
+## Trained Model & Dataset
+
+The dataset used for training and the resulting trained model are publicly available on Hugging Face:
+
+* Dataset: https://huggingface.co/datasets/niqueisa/fake-sha_taglish_dataset
+* Trained model: https://huggingface.co/niqueisa/fake-sha_xlmr-roberta
+
+Quick notes on using the Hugging Face model:
+
+- You can perform inference using the Hugging Face Transformers library. Example (Python):
+
+```python
+from transformers import pipeline
+
+model_id = "niqueisa/fake-sha_xlmr-roberta"
+classifier = pipeline("text-classification", model=model_id, device=-1)  # device=0 for GPU
+
+result = classifier("Sample text to analyze")
+print(result)
+```
+
+- The dataset contains Taglish text samples and annotations used for training and evaluation.
+- If you plan to run inference in the backend, consider caching the model locally or using the Hugging Face Inference API for production deployment.
 
 ## Features
 
@@ -49,7 +73,7 @@ FAKE-SHA/
 │   ├── shared/       # Shared JS (e.g. backend API client)
 │   └── assets/       # CSS, icons, logo (Tailwind output: assets/styles.css)
 ├── backend/          # FastAPI API + Supabase (see backend/README.md)
-├── data/             # Train/validation/test CSVs
+├── data/             # Train/validation/test CSVs (if present)
 ├── ui/               # Tailwind CSS source (input.css)
 ├── package.json      # Tailwind build scripts
 └── README.md         # This file
@@ -87,6 +111,7 @@ See **[backend/README.md](backend/README.md)** for:
 * Dependencies (`pip install -r requirements.txt`)
 * Optional Supabase configuration
 * Running the server (`uvicorn main:app --reload --host 0.0.0.0 --port 8000`)
+* Notes on integrating the Hugging Face model: set the model id to `niqueisa/fake-sha_xlmr-roberta` or provide a local model path.
 
 ## Loading the Extension (Chromium-Based Browsers)
 
